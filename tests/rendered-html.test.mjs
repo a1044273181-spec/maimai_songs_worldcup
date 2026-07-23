@@ -116,6 +116,18 @@ test("battle UI implements immediate preview and a single-screen tournament post
   assert.match(page, /isQQBrowser/);
   assert.match(page, /copyPosterToClipboard/);
   assert.match(page, /poster-footer-description/);
+  assert.match(page, /TOURNAMENT_STATE_KEY/);
+  assert.match(page, /mai-cup-active-tournament-v1/);
+  assert.match(page, /PersistedTournamentState/);
+  assert.match(page, /window\.localStorage\.setItem\(\s*TOURNAMENT_STATE_KEY/);
+  assert.match(page, /setPhase\(saved\.phase\)/);
+  assert.match(page, /试听乐曲来源/);
+  assert.match(page, /灵感与界面参考/);
+  assert.match(page, /舞萌曲库来源/);
+  assert.match(page, /music\.163\.com\/djradio\?id=969217156/);
+  assert.match(page, /musiccup\.app\/\?lang=hans/);
+  assert.match(page, /arcade-songs\.zetaraku\.dev\/maimai/);
+  assert.match(styles, /\.credit-grid/);
   assert.match(styles, /\.poster-cup-footer[\s\S]*display: block/);
   assert.match(styles, /\.poster-footer-qr[\s\S]*position: absolute/);
   assert.match(styles, /\.poster-footer-description[\s\S]*position: absolute/);

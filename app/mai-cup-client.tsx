@@ -68,7 +68,29 @@ type KnockoutRound = {
   automaticWinners: Song[];
 };
 
+type PersistedTournamentState = {
+  schemaVersion: 1;
+  savedAt: string;
+  phase: Exclude<Phase, "home">;
+  selectedVersion: Version;
+  entrants: Song[];
+  groupStageGroups: Song[][];
+  groupIndex: number;
+  groupPicks: string[];
+  groupQualified: Song[];
+  groupEliminated: Song[];
+  revivalGroups: Song[][];
+  revivalIndex: number;
+  revivedSongs: Song[];
+  knockoutRound: KnockoutRound | null;
+  matchIndex: number;
+  knockoutWinners: Song[];
+  history: HistoryRecord[];
+  champion: Song | null;
+};
+
 const RESULTS_KEY = "mai-cup-results-v4";
+const TOURNAMENT_STATE_KEY = "mai-cup-active-tournament-v1";
 const GROUP_SIZE = 4;
 const GROUP_PICKS = 2;
 const PREVIEW_LIMIT_SECONDS = 30;
@@ -81,6 +103,10 @@ const SITE_URL =
 const SITE_QR_IMAGE =
   process.env.NEXT_PUBLIC_SITE_QR_IMAGE ?? "/site-qr.png";
 const PUBLIC_SITE_URL = `${SITE_URL.replace(/\/$/, "")}${BASE_PATH}/`;
+const PREVIEW_SOURCE_URL =
+  "https://music.163.com/djradio?id=969217156&uct2=U2FsdGVkX18aTLvxAyeaG7AMBnYSuIXdv61N0TdPrFk=";
+const INSPIRATION_URL = "https://musiccup.app/?lang=hans";
+const CATALOG_SOURCE_URL = "https://arcade-songs.zetaraku.dev/maimai/";
 const palette = ["cyan", "lime", "pink", "violet", "orange"];
 
 function assetPath(path: string) {
@@ -202,6 +228,7 @@ export default function Home() {
   const [posterPreviewUrl, setPosterPreviewUrl] = useState<string | null>(
     null,
   );
+  const [sessionReady, setSessionReady] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const posterRef = useRef<HTMLElement | null>(null);
   const posterBlobRef = useRef<Blob | null>(null);
@@ -220,10 +247,102 @@ export default function Home() {
     try {
       const stored = window.localStorage.getItem(RESULTS_KEY);
       if (stored) setResults(JSON.parse(stored));
+
+      const savedTournament = window.localStorage.getItem(
+        TOURNAMENT_STATE_KEY,
+      );
+      if (savedTournament) {
+        const saved = JSON.parse(
+          savedTournament,
+        ) as Partial<PersistedTournamentState>;
+        if (
+          saved.schemaVersion === 1 &&
+          saved.phase &&
+          saved.phase !== "home" &&
+          saved.selectedVersion &&
+          Array.isArray(saved.entrants) &&
+          Array.isArray(saved.groupStageGroups)
+        ) {
+          setSelectedVersion(saved.selectedVersion);
+          setEntrants(saved.entrants);
+          setGroupStageGroups(saved.groupStageGroups);
+          setGroupIndex(saved.groupIndex ?? 0);
+          setGroupPicks(saved.groupPicks ?? []);
+          setGroupQualified(saved.groupQualified ?? []);
+          setGroupEliminated(saved.groupEliminated ?? []);
+          setRevivalGroups(saved.revivalGroups ?? []);
+          setRevivalIndex(saved.revivalIndex ?? 0);
+          setRevivedSongs(saved.revivedSongs ?? []);
+          setKnockoutRound(saved.knockoutRound ?? null);
+          setMatchIndex(saved.matchIndex ?? 0);
+          setKnockoutWinners(saved.knockoutWinners ?? []);
+          setHistory(saved.history ?? []);
+          setChampion(saved.champion ?? null);
+          setPhase(saved.phase);
+        }
+      }
     } catch {
       // 本地存储不可用时仍可完成本次比赛。
+    } finally {
+      setSessionReady(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!sessionReady) return;
+
+    try {
+      if (phase === "home" || !selectedVersion) {
+        window.localStorage.removeItem(TOURNAMENT_STATE_KEY);
+        return;
+      }
+
+      const snapshot: PersistedTournamentState = {
+        schemaVersion: 1,
+        savedAt: new Date().toISOString(),
+        phase,
+        selectedVersion,
+        entrants,
+        groupStageGroups,
+        groupIndex,
+        groupPicks,
+        groupQualified,
+        groupEliminated,
+        revivalGroups,
+        revivalIndex,
+        revivedSongs,
+        knockoutRound,
+        matchIndex,
+        knockoutWinners,
+        history,
+        champion,
+      };
+      window.localStorage.setItem(
+        TOURNAMENT_STATE_KEY,
+        JSON.stringify(snapshot),
+      );
+    } catch {
+      // 存储空间或隐私设置不允许时，不影响当前比赛继续进行。
+    }
+  }, [
+    sessionReady,
+    phase,
+    selectedVersion,
+    entrants,
+    groupStageGroups,
+    groupIndex,
+    groupPicks,
+    groupQualified,
+    groupEliminated,
+    revivalGroups,
+    revivalIndex,
+    revivedSongs,
+    knockoutRound,
+    matchIndex,
+    knockoutWinners,
+    history,
+    champion,
+  ]);
 
   const stopPreview = useCallback(() => {
     const audio = audioRef.current;
@@ -1718,19 +1837,44 @@ export default function Home() {
         </ol>
       </section>
 
-      <footer>
-        <a className="brand" href="#top">
-          <span className="brand-disc">
-            <i />
-          </span>
-          <span>
-            <strong>mai:CUP</strong>
-            <small>CHINA VERSION</small>
-          </span>
-        </a>
-        <p>
-          中国版曲库、版本与封面来自 LXNS；试听来自指定网易云电台。
-          宴会场曲目已排除，试听仅播放30秒。
+      <footer className="site-footer">
+        <div className="site-footer-heading">
+          <a className="brand" href="#top">
+            <span className="brand-disc">
+              <i />
+            </span>
+            <span>
+              <strong>mai:CUP</strong>
+              <small>CHINA VERSION</small>
+            </span>
+          </a>
+          <div>
+            <span className="eyebrow">SOURCES & CREDITS</span>
+            <h2>来源与鸣谢</h2>
+            <p>
+              本站为非官方同人项目。投票进度自动保存在当前浏览器中，关闭网页后再次打开可继续比赛。
+            </p>
+          </div>
+        </div>
+        <div className="credit-grid">
+          <a href={PREVIEW_SOURCE_URL} target="_blank" rel="noreferrer">
+            <small>试听乐曲来源</small>
+            <strong>网易云音乐电台</strong>
+            <span>{PREVIEW_SOURCE_URL.replace("https://", "")}</span>
+          </a>
+          <a href={INSPIRATION_URL} target="_blank" rel="noreferrer">
+            <small>灵感与界面参考</small>
+            <strong>Music Cup</strong>
+            <span>musiccup.app/?lang=hans</span>
+          </a>
+          <a href={CATALOG_SOURCE_URL} target="_blank" rel="noreferrer">
+            <small>舞萌曲库来源</small>
+            <strong>Arcade Songs</strong>
+            <span>arcade-songs.zetaraku.dev/maimai/</span>
+          </a>
+        </div>
+        <p className="site-disclaimer">
+          歌曲、封面、版本标识及相关作品版权归原作者与权利方所有；宴谱面已从参赛曲目中排除，试听片段最长播放30秒。
         </p>
       </footer>
     </main>
