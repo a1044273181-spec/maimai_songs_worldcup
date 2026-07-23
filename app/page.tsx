@@ -71,8 +71,8 @@ type KnockoutRound = {
 const RESULTS_KEY = "mai-cup-results-v4";
 const GROUP_SIZE = 4;
 const GROUP_PICKS = 2;
-const PREVIEW_DELAY_MS = 500;
 const PREVIEW_LIMIT_SECONDS = 30;
+const SITE_URL = "https://mai-cup-cn-2026.xzso3.chatgpt.site";
 const palette = ["cyan", "lime", "pink", "violet", "orange"];
 
 function shuffle<T>(items: T[]) {
@@ -174,11 +174,9 @@ export default function Home() {
   const [champion, setChampion] = useState<Song | null>(null);
   const [imageErrors, setImageErrors] = useState<Record<string, true>>({});
   const [previewErrors, setPreviewErrors] = useState<Record<string, true>>({});
-  const [preparingSongId, setPreparingSongId] = useState<string | null>(null);
   const [playingSongId, setPlayingSongId] = useState<string | null>(null);
   const [previewSeconds, setPreviewSeconds] = useState(PREVIEW_LIMIT_SECONDS);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetch("/maimai-cn.json")
@@ -198,10 +196,6 @@ export default function Home() {
   }, []);
 
   const stopPreview = useCallback(() => {
-    if (previewTimerRef.current) {
-      clearTimeout(previewTimerRef.current);
-      previewTimerRef.current = null;
-    }
     const audio = audioRef.current;
     if (audio) {
       audio.pause();
@@ -211,26 +205,21 @@ export default function Home() {
       audio.removeAttribute("src");
       audio.load();
     }
-    setPreparingSongId(null);
     setPlayingSongId(null);
     setPreviewSeconds(PREVIEW_LIMIT_SECONDS);
   }, []);
 
   useEffect(
     () => () => {
-      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
       audioRef.current?.pause();
     },
     [],
   );
 
   const togglePreview = useCallback(
-    (song: Song) => {
+    async (song: Song) => {
       if (!song.preview || previewErrors[song.id]) return;
-      if (
-        preparingSongId === song.id ||
-        playingSongId === song.id
-      ) {
+      if (playingSongId === song.id) {
         stopPreview();
         return;
       }
@@ -261,25 +250,15 @@ export default function Home() {
         stopPreview();
       };
 
-      setPreparingSongId(song.id);
-      previewTimerRef.current = setTimeout(async () => {
-        previewTimerRef.current = null;
-        try {
-          await audio.play();
-          setPreparingSongId(null);
-          setPlayingSongId(song.id);
-        } catch {
-          setPreviewErrors((current) => ({ ...current, [song.id]: true }));
-          stopPreview();
-        }
-      }, PREVIEW_DELAY_MS);
+      setPlayingSongId(song.id);
+      try {
+        await audio.play();
+      } catch {
+        setPreviewErrors((current) => ({ ...current, [song.id]: true }));
+        stopPreview();
+      }
     },
-    [
-      playingSongId,
-      preparingSongId,
-      previewErrors,
-      stopPreview,
-    ],
+    [playingSongId, previewErrors, stopPreview],
   );
 
   const songCounts = useMemo(() => {
@@ -330,7 +309,7 @@ export default function Home() {
             : entrants;
 
   useEffect(() => {
-    const activeId = playingSongId ?? preparingSongId;
+    const activeId = playingSongId;
     if (
       activeId &&
       !currentVisibleSongs.some((song) => song.id === activeId)
@@ -340,7 +319,6 @@ export default function Home() {
   }, [
     currentVisibleSongs,
     playingSongId,
-    preparingSongId,
     stopPreview,
   ]);
 
@@ -575,14 +553,13 @@ export default function Home() {
     return (
       <div className={`song-grid song-count-${songs.length}`}>
         {songs.map((song, index) => {
-          const isPreparing = preparingSongId === song.id;
           const isPlaying = playingSongId === song.id;
           const isSelected = selectedIds.includes(song.id);
           const previewUnavailable = !song.preview || previewErrors[song.id];
           return (
             <article
               className={`song-card tone-${songTone(song, index)} ${
-                isPlaying || isPreparing ? "is-playing" : ""
+                isPlaying ? "is-playing" : ""
               } ${isSelected ? "is-selected" : ""}`}
               key={song.id}
             >
@@ -601,7 +578,7 @@ export default function Home() {
                   </span>
                 )}
                 <span className="card-glow" />
-                {(isPlaying || isPreparing) && (
+                {isPlaying && (
                   <span className="playing-badge" aria-hidden="true">
                     <i />
                     <i />
@@ -626,15 +603,13 @@ export default function Home() {
                   onClick={() => togglePreview(song)}
                 >
                   <span aria-hidden="true">
-                    {isPlaying || isPreparing ? "■" : "▶"}
+                    {isPlaying ? "■" : "▶"}
                   </span>
                   {previewUnavailable
                     ? "暂无试听"
-                    : isPreparing
-                      ? "0.5s 后播放"
-                      : isPlaying
-                        ? `停止 · ${previewSeconds}s`
-                        : "试听 30s"}
+                    : isPlaying
+                      ? `停止 · ${previewSeconds}s`
+                      : "立即试听"}
                 </button>
                 <button
                   className="pick-label"
@@ -734,35 +709,36 @@ export default function Home() {
               <strong>1</strong>最终冠军
             </span>
           </div>
-          <div className="roster-grid">
-            {groupStageGroups.flatMap((group, rosterGroupIndex) =>
-              group.map((song, songIndex) => (
-                <article className="roster-song" key={song.id}>
-                  <span>
-                    {String(
-                      groupStageGroups
-                        .slice(0, rosterGroupIndex)
-                        .reduce((total, item) => total + item.length, 0) +
-                        songIndex +
-                        1,
-                    ).padStart(2, "0")}
-                  </span>
-                  {!imageErrors[song.id] ? (
-                    <img
-                      src={song.cover}
-                      alt=""
-                      onError={() => reportImageError(song.id)}
-                    />
-                  ) : (
-                    <i>mai</i>
-                  )}
-                  <div>
-                    <strong>{song.title}</strong>
-                    <small>第 {rosterGroupIndex + 1} 组</small>
-                  </div>
-                </article>
-              )),
-            )}
+          <div className="roster-groups">
+            {groupStageGroups.map((group, rosterGroupIndex) => (
+              <section className="roster-group" key={rosterGroupIndex}>
+                <header>
+                  <span>GROUP {String(rosterGroupIndex + 1).padStart(2, "0")}</span>
+                  <strong>第 {rosterGroupIndex + 1} 组</strong>
+                  <small>选 2 首晋级</small>
+                </header>
+                <div>
+                  {group.map((song, songIndex) => (
+                    <article className="roster-song" key={song.id}>
+                      <span>{songIndex + 1}</span>
+                      {!imageErrors[song.id] ? (
+                        <img
+                          src={song.cover}
+                          alt=""
+                          onError={() => reportImageError(song.id)}
+                        />
+                      ) : (
+                        <i>mai</i>
+                      )}
+                      <div>
+                        <strong>{song.title}</strong>
+                        <small>{song.artist}</small>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ))}
           </div>
           <div className="roster-start">
             <button className="primary-button" onClick={startGroupStage}>
@@ -845,7 +821,7 @@ export default function Home() {
               </span>
             </h1>
             <p>
-              点击试听后 0.5 秒开始播放，最多试听 30 秒；切换歌曲时会自动停止。
+              点击歌曲试听按钮后立即播放，最多试听 30 秒；切换歌曲时会自动停止。
             </p>
           </div>
           <div className="progress-row">
@@ -907,73 +883,155 @@ export default function Home() {
             </button>
             <div>
               <span className="eyebrow">FULL TOURNAMENT</span>
-              <strong>{selectedVersion.title} · 比赛全过程</strong>
+              <strong>{selectedVersion.title} · 一图流赛程</strong>
             </div>
             <button className="text-button" onClick={goHome}>
               全部版本
             </button>
           </header>
-          <section className="overview-champion">
-            <span className="eyebrow">CHAMPION</span>
-            <div className="overview-champion-main">
+          <article className="tournament-poster">
+            <section className="poster-hero">
+              <div className="poster-brand">
+                <span className="brand-disc">
+                  <i />
+                </span>
+                <div>
+                  <strong>mai:CUP</strong>
+                  <small>MAIMAI CHINA FAVORITE TOURNAMENT</small>
+                </div>
+              </div>
+              <div>
+                <span className="eyebrow">FULL TOURNAMENT STORY</span>
+                <h1>
+                  {selectedVersion.title}
+                  <br />
+                  歌曲世界杯
+                </h1>
+                <p>
+                  从版本完整曲库出发，经过小组赛双选、淘汰复活与一对一淘汰，
+                  <br />
+                  依次决出八强、四强与最终冠军。下方记录了本次比赛的全部选择。
+                </p>
+              </div>
+              <div className="poster-hero-bottom">
+                <div className="poster-stats">
+                  <span>
+                    <strong>{entrants.length}</strong>参赛歌曲
+                  </span>
+                  <span>
+                    <strong>{groupStageGroups.length}</strong>初始小组
+                  </span>
+                  <span>
+                    <strong>{overviewStages.length}</strong>比赛阶段
+                  </span>
+                </div>
+                <div className="poster-qr">
+                  <img src="/site-qr.png" alt="mai:CUP 网站主页二维码" />
+                  <div>
+                    <strong>扫码开始你的比赛</strong>
+                    <span>{SITE_URL.replace("https://", "")}</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="poster-champion">
+              <div className="poster-crown">♛</div>
               <img src={champion.cover} alt="" />
               <div>
-                <small>🏆 冠军</small>
-                <h1>{champion.title}</h1>
+                <span>🏆 CHAMPION · 本届冠军</span>
+                <h2>{champion.title}</h2>
                 <p>{champion.artist}</p>
+                <small>
+                  从 {entrants.length} 首歌曲中胜出 · {champion.bpm} BPM
+                </small>
               </div>
-            </div>
-          </section>
-          <div className="bracket-scroll">
-            <div className="bracket-board">
-              <section className="bracket-stage">
-                <header>
-                  <span>00</span>
-                  <h2>参赛曲库</h2>
-                  <small>{entrants.length} 首</small>
+            </section>
+
+            <section className="poster-section poster-roster-section">
+              <header className="poster-section-heading">
+                <span>00</span>
+                <div>
+                  <small>GROUP DRAW</small>
+                  <h2>参赛歌曲与初始分组</h2>
+                </div>
+                <p>每组框选展示 · 每组选择2首晋级</p>
+              </header>
+              <div className="poster-roster-groups">
+                {groupStageGroups.map((group, rosterGroupIndex) => (
+                  <article
+                    className="poster-roster-group"
+                    key={rosterGroupIndex}
+                  >
+                    <header>
+                      <strong>
+                        GROUP {String(rosterGroupIndex + 1).padStart(2, "0")}
+                      </strong>
+                      <span>第 {rosterGroupIndex + 1} 组</span>
+                    </header>
+                    {group.map((song) => (
+                      <div key={song.id}>
+                        <img src={song.cover} alt="" />
+                        <span>{song.title}</span>
+                      </div>
+                    ))}
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            {overviewStages.map((stage, stageIndex) => (
+              <section className="poster-section" key={stage.label}>
+                <header className="poster-section-heading">
+                  <span>{String(stageIndex + 1).padStart(2, "0")}</span>
+                  <div>
+                    <small>TOURNAMENT STAGE</small>
+                    <h2>{stage.label}</h2>
+                  </div>
+                  <p>{stage.records.length} 场选择</p>
                 </header>
-                <div className="bracket-roster">
-                  {entrants.map((song) => (
-                    <div className="bracket-song" key={song.id}>
-                      <img src={song.cover} alt="" />
-                      <span>{song.title}</span>
-                    </div>
+                <div className="poster-matches">
+                  {stage.records.map((record) => (
+                    <article className="poster-match" key={record.id}>
+                      <small>{record.detail}</small>
+                      {record.participants.map((song) => {
+                        const isWinner = record.winners.some(
+                          (winner) => winner.id === song.id,
+                        );
+                        return (
+                          <div
+                            className={isWinner ? "advanced" : "eliminated"}
+                            key={song.id}
+                          >
+                            <img src={song.cover} alt="" />
+                            <span>{song.title}</span>
+                            <b>{isWinner ? "晋级" : "淘汰"}</b>
+                          </div>
+                        );
+                      })}
+                    </article>
                   ))}
                 </div>
               </section>
-              {overviewStages.map((stage, stageIndex) => (
-                <section className="bracket-stage" key={stage.label}>
-                  <header>
-                    <span>{String(stageIndex + 1).padStart(2, "0")}</span>
-                    <h2>{stage.label}</h2>
-                    <small>{stage.records.length} 场</small>
-                  </header>
-                  <div className="bracket-matches">
-                    {stage.records.map((record) => (
-                      <article className="bracket-match" key={record.id}>
-                        <small>{record.detail}</small>
-                        {record.participants.map((song) => {
-                          const isWinner = record.winners.some(
-                            (winner) => winner.id === song.id,
-                          );
-                          return (
-                            <div
-                              className={isWinner ? "advanced" : "eliminated"}
-                              key={song.id}
-                            >
-                              <img src={song.cover} alt="" />
-                              <span>{song.title}</span>
-                              <b>{isWinner ? "✓" : "×"}</b>
-                            </div>
-                          );
-                        })}
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          </div>
+            ))}
+
+            <footer className="poster-footer">
+              <div className="poster-brand">
+                <span className="brand-disc">
+                  <i />
+                </span>
+                <div>
+                  <strong>mai:CUP</strong>
+                  <small>为你的本命曲办一场世界杯</small>
+                </div>
+              </div>
+              <p>
+                选择一个舞萌中国版，试听歌曲并完成属于你的完整淘汰赛。
+                <br />
+                扫描页面顶部二维码或访问 {SITE_URL.replace("https://", "")}
+              </p>
+            </footer>
+          </article>
         </main>
       );
     }

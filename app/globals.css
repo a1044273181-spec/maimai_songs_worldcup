@@ -2090,3 +2090,585 @@ kbd {
     grid-template-columns: 1fr;
   }
 }
+
+/* Framed roster groups and single-flow tournament poster */
+
+.roster-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.roster-group {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(34, 231, 242, 0.34);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(34, 231, 242, 0.08), transparent 38%),
+    rgba(17, 21, 29, 0.84);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.roster-group > header {
+  min-height: 42px;
+  padding: 0 4px 12px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  border-bottom: 1px solid rgba(34, 231, 242, 0.2);
+}
+
+.roster-group > header span {
+  grid-column: 1 / -1;
+  color: var(--cyan);
+  font-family: ui-monospace, monospace;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+}
+
+.roster-group > header strong {
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.roster-group > header small {
+  color: var(--lime);
+  font-size: 8px;
+}
+
+.roster-group > div {
+  padding-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.roster-group .roster-song {
+  width: 100%;
+}
+
+.tournament-poster {
+  width: min(1120px, calc(100% - 32px));
+  margin: 34px auto 72px;
+  position: relative;
+  border: 1px solid rgba(143, 99, 255, 0.42);
+  border-radius: 30px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    #0b0a12;
+  background-size: 48px 48px;
+  overflow: hidden;
+  box-shadow:
+    0 60px 140px rgba(0, 0, 0, 0.52),
+    0 0 80px rgba(143, 99, 255, 0.08);
+}
+
+.poster-hero {
+  min-height: 630px;
+  padding: 46px 56px 54px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 78% 23%, rgba(255, 78, 203, 0.2), transparent 27%),
+    radial-gradient(circle at 15% 72%, rgba(143, 99, 255, 0.2), transparent 31%),
+    linear-gradient(145deg, rgba(143, 99, 255, 0.1), transparent 50%);
+}
+
+.poster-hero::after {
+  content: "CUP";
+  position: absolute;
+  top: 82px;
+  right: -28px;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.07);
+  font-family: Impact, "Arial Narrow", sans-serif;
+  font-size: 260px;
+  font-style: italic;
+  line-height: 0.8;
+  pointer-events: none;
+}
+
+.poster-brand {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.poster-brand > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.poster-brand strong {
+  font-family: Impact, "Arial Narrow", sans-serif;
+  font-size: 24px;
+  font-style: italic;
+  letter-spacing: 0.05em;
+}
+
+.poster-brand small {
+  color: var(--muted);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.poster-hero > div:nth-child(2) {
+  position: relative;
+  z-index: 1;
+}
+
+.poster-hero h1 {
+  max-width: 800px;
+  margin: 18px 0 24px;
+  font-size: clamp(64px, 9vw, 112px);
+  line-height: 0.9;
+  letter-spacing: -0.065em;
+}
+
+.poster-hero p {
+  margin: 0;
+  color: #adb4c1;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.poster-hero-bottom {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 30px;
+}
+
+.poster-stats {
+  display: flex;
+  gap: 40px;
+}
+
+.poster-stats span {
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 9px;
+}
+
+.poster-stats strong {
+  color: white;
+  font-family: Impact, "Arial Narrow", sans-serif;
+  font-size: 30px;
+  font-weight: 500;
+}
+
+.poster-qr {
+  padding: 10px 14px 10px 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(18px);
+}
+
+.poster-qr img {
+  width: 92px;
+  height: 92px;
+  padding: 6px;
+  border-radius: 10px;
+  background: white;
+}
+
+.poster-qr > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.poster-qr strong {
+  font-size: 11px;
+}
+
+.poster-qr span {
+  max-width: 190px;
+  color: var(--cyan);
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, monospace;
+  font-size: 7px;
+}
+
+.poster-champion {
+  min-height: 340px;
+  padding: 54px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 38px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 78, 203, 0.2);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 78, 203, 0.13), transparent 35%),
+    linear-gradient(90deg, rgba(143, 99, 255, 0.09), transparent 32% 68%, rgba(255, 78, 203, 0.08));
+}
+
+.poster-champion > img {
+  width: 220px;
+  height: 220px;
+  border: 2px solid var(--pink);
+  border-radius: 28px;
+  object-fit: cover;
+  box-shadow:
+    0 28px 64px rgba(0, 0, 0, 0.42),
+    0 0 50px rgba(255, 78, 203, 0.2);
+}
+
+.poster-crown {
+  position: absolute;
+  top: 30px;
+  left: calc(50% - 45px);
+  color: #ffd65a;
+  font-size: 52px;
+  transform: rotate(-8deg);
+}
+
+.poster-champion > div:last-child {
+  min-width: 0;
+  max-width: 540px;
+}
+
+.poster-champion > div:last-child > span {
+  color: var(--pink);
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+}
+
+.poster-champion h2 {
+  margin: 12px 0 8px;
+  font-size: clamp(42px, 6vw, 72px);
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+  overflow-wrap: anywhere;
+}
+
+.poster-champion p {
+  margin: 0 0 18px;
+  color: var(--muted);
+}
+
+.poster-champion small {
+  color: #747d8a;
+  font-family: ui-monospace, monospace;
+  font-size: 8px;
+}
+
+.poster-section {
+  padding: 54px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.poster-section-heading {
+  min-height: 72px;
+  margin-bottom: 28px;
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(143, 99, 255, 0.32);
+}
+
+.poster-section-heading > span {
+  color: var(--violet);
+  font-family: Impact, "Arial Narrow", sans-serif;
+  font-size: 32px;
+  font-style: italic;
+}
+
+.poster-section-heading > div {
+  min-width: 0;
+}
+
+.poster-section-heading small {
+  color: var(--cyan);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.poster-section-heading h2 {
+  margin: 3px 0 0;
+  font-size: 25px;
+  letter-spacing: -0.035em;
+}
+
+.poster-section-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.poster-roster-groups,
+.poster-matches {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.poster-roster-group,
+.poster-match {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid rgba(143, 99, 255, 0.25);
+  border-radius: 11px;
+  background: rgba(21, 20, 30, 0.88);
+}
+
+.poster-roster-group > header {
+  min-height: 31px;
+  margin-bottom: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border-bottom: 1px solid rgba(143, 99, 255, 0.2);
+}
+
+.poster-roster-group > header strong {
+  color: var(--violet);
+  font-family: ui-monospace, monospace;
+  font-size: 7px;
+  letter-spacing: 0.08em;
+}
+
+.poster-roster-group > header span {
+  color: #707887;
+  font-size: 7px;
+}
+
+.poster-roster-group > div,
+.poster-match > div {
+  min-width: 0;
+  height: 31px;
+  padding: 3px 5px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.poster-roster-group > div + div,
+.poster-match > div + div {
+  margin-top: 4px;
+}
+
+.poster-roster-group img,
+.poster-match img {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.poster-roster-group div span,
+.poster-match div span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.poster-match > small {
+  display: block;
+  margin: 0 0 7px;
+  color: #707887;
+  font-size: 7px;
+}
+
+.poster-match > div {
+  grid-template-columns: 24px minmax(0, 1fr) 30px;
+}
+
+.poster-match > div.advanced {
+  color: white;
+  background:
+    linear-gradient(90deg, rgba(255, 78, 203, 0.15), transparent),
+    rgba(255, 255, 255, 0.04);
+  box-shadow: inset 2px 0 var(--pink);
+}
+
+.poster-match > div.eliminated {
+  color: #626774;
+  opacity: 0.55;
+}
+
+.poster-match b {
+  color: var(--pink);
+  text-align: right;
+  font-size: 7px;
+}
+
+.poster-match .eliminated b {
+  color: #555d68;
+}
+
+.poster-footer {
+  width: 100%;
+  min-height: 180px;
+  margin: 0;
+  padding: 42px 54px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at 15% 50%, rgba(143, 99, 255, 0.15), transparent 26%),
+    rgba(12, 11, 19, 0.92);
+}
+
+.poster-footer p {
+  max-width: 520px;
+  margin: 0;
+  color: #747d8a;
+  text-align: right;
+  font-size: 9px;
+  line-height: 1.8;
+}
+
+@media (max-width: 900px) {
+  .poster-roster-groups,
+  .poster-matches {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .roster-groups {
+    grid-template-columns: 1fr;
+  }
+
+  .tournament-poster {
+    width: min(100% - 16px, 620px);
+    margin-top: 16px;
+    border-radius: 18px;
+  }
+
+  .poster-hero {
+    min-height: 620px;
+    padding: 28px 22px 30px;
+  }
+
+  .poster-hero::after {
+    top: 150px;
+    font-size: 170px;
+  }
+
+  .poster-hero h1 {
+    font-size: clamp(54px, 17vw, 80px);
+  }
+
+  .poster-hero p br {
+    display: none;
+  }
+
+  .poster-hero-bottom {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .poster-stats {
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .poster-qr {
+    align-self: flex-start;
+  }
+
+  .poster-champion {
+    padding: 54px 22px 38px;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .poster-champion > img {
+    width: 180px;
+    height: 180px;
+  }
+
+  .poster-crown {
+    top: 25px;
+    left: 50%;
+    transform: translateX(-50%) rotate(-8deg);
+  }
+
+  .poster-section {
+    padding: 36px 16px;
+  }
+
+  .poster-section-heading {
+    grid-template-columns: 42px 1fr;
+  }
+
+  .poster-section-heading > p {
+    grid-column: 2;
+    padding-bottom: 10px;
+  }
+
+  .poster-roster-groups,
+  .poster-matches {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .poster-footer {
+    padding: 34px 22px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .poster-footer p {
+    text-align: left;
+  }
+}
+
+@media (max-width: 430px) {
+  .roster-group > div,
+  .poster-roster-groups,
+  .poster-matches {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .overview-page {
+    background: white;
+  }
+
+  .overview-header {
+    display: none;
+  }
+
+  .tournament-poster {
+    width: 1120px;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

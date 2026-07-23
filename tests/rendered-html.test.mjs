@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
 
 async function render() {
@@ -59,15 +59,16 @@ test("catalog uses Chinese annual versions and mapped previews", async () => {
   );
 });
 
-test("battle UI implements the full tournament and delayed preview", async () => {
+test("battle UI implements immediate preview and the full tournament poster", async () => {
   const page = await readFile(
     new URL("../app/page.tsx", import.meta.url),
     "utf8",
   );
 
   assert.match(page, /audioRef = useRef<HTMLAudioElement/);
-  assert.match(page, /PREVIEW_DELAY_MS = 500/);
+  assert.doesNotMatch(page, /PREVIEW_DELAY_MS|setTimeout/);
   assert.match(page, /PREVIEW_LIMIT_SECONDS = 30/);
+  assert.match(page, /await audio\.play\(\)/);
   assert.match(page, /Math\.ceil\(nextQualified\.length \/ 3\)/);
   assert.match(page, /第一轮小组赛/);
   assert.match(page, /淘汰复活/);
@@ -75,7 +76,13 @@ test("battle UI implements the full tournament and delayed preview", async () =>
   assert.match(page, /半决赛/);
   assert.match(page, /总决赛/);
   assert.match(page, /观看比赛概览/);
+  assert.match(page, /className="roster-group"/);
+  assert.match(page, /className="tournament-poster"/);
+  assert.match(page, /src="\/site-qr\.png"/);
   assert.match(page, /stopPreview\(\)/);
-  assert.match(page, /试听 30s/);
+  assert.match(page, /立即试听/);
   assert.match(page, /暂无试听/);
+
+  const qr = await stat(new URL("../public/site-qr.png", import.meta.url));
+  assert.ok(qr.size > 1000);
 });
