@@ -72,6 +72,7 @@ const RESULTS_KEY = "mai-cup-results-v4";
 const GROUP_SIZE = 4;
 const GROUP_PICKS = 2;
 const PREVIEW_LIMIT_SECONDS = 30;
+const POSTER_EXPORT_WIDTH = 1080;
 const SITE_URL = "https://mai-cup-cn-2026.xzso3.chatgpt.site";
 const palette = ["cyan", "lime", "pink", "violet", "orange"];
 
@@ -581,19 +582,38 @@ export default function Home() {
       ),
     );
 
-    const { toBlob } = await import("html-to-image");
-    const posterHeight = poster.scrollHeight;
-    const pixelRatio =
-      posterHeight > 12000 ? 1 : posterHeight > 8000 ? 1.5 : 2;
-    const blob = await toBlob(poster, {
-      backgroundColor: "#0b0a12",
-      cacheBust: true,
-      pixelRatio,
-      imagePlaceholder:
-        "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=",
-    });
-    if (!blob) throw new Error("image");
-    return blob;
+    const exportHost = document.createElement("div");
+    exportHost.className = "poster-export-host";
+    const exportPoster = poster.cloneNode(true) as HTMLElement;
+    exportPoster.classList.add("poster-export-layout");
+    exportHost.appendChild(exportPoster);
+    document.body.appendChild(exportHost);
+
+    try {
+      const { toBlob } = await import("html-to-image");
+      const posterHeight = exportPoster.scrollHeight;
+      const blob = await toBlob(exportPoster, {
+        width: POSTER_EXPORT_WIDTH,
+        height: posterHeight,
+        canvasWidth: POSTER_EXPORT_WIDTH,
+        canvasHeight: posterHeight,
+        backgroundColor: "#0b0a12",
+        cacheBust: true,
+        pixelRatio: 1,
+        style: {
+          width: `${POSTER_EXPORT_WIDTH}px`,
+          maxWidth: "none",
+          margin: "0",
+          borderRadius: "0",
+        },
+        imagePlaceholder:
+          "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=",
+      });
+      if (!blob) throw new Error("image");
+      return blob;
+    } finally {
+      exportHost.remove();
+    }
   }
 
   function posterFileName() {
@@ -741,6 +761,28 @@ export default function Home() {
                     <i />
                   </span>
                 )}
+                <button
+                  className="cover-preview-button"
+                  type="button"
+                  disabled={previewUnavailable}
+                  onClick={() => togglePreview(song)}
+                  aria-label={
+                    previewUnavailable
+                      ? `${song.title} 暂无试听`
+                      : isPlaying
+                        ? `停止试听 ${song.title}`
+                        : `试听 ${song.title}`
+                  }
+                  title={
+                    previewUnavailable
+                      ? "暂无试听"
+                      : isPlaying
+                        ? `停止试听 · ${previewSeconds}s`
+                        : "立即试听"
+                  }
+                >
+                  <span className="preview-triangle" aria-hidden="true" />
+                </button>
               </span>
               <span className="song-copy">
                 <span className="song-title">{song.title}</span>
@@ -751,21 +793,6 @@ export default function Home() {
                 </span>
               </span>
               <span className="song-actions">
-                <button
-                  className="preview-button"
-                  type="button"
-                  disabled={previewUnavailable}
-                  onClick={() => togglePreview(song)}
-                >
-                  <span aria-hidden="true">
-                    {isPlaying ? "■" : "▶"}
-                  </span>
-                  {previewUnavailable
-                    ? "暂无试听"
-                    : isPlaying
-                      ? `停止 · ${previewSeconds}s`
-                      : "立即试听"}
-                </button>
                 <span className="pick-label" aria-hidden="true">
                   {multiSelect
                     ? isSelected
@@ -1072,7 +1099,7 @@ export default function Home() {
               {exportState === "rendering"
                 ? "正在生成完整长图，歌曲较多时需要稍等片刻…"
                 : exportState === "ready"
-                  ? "完整一图流已经生成，可以保存PNG或直接分享。"
+                  ? "宽度1080px的完整一图流已经生成，可以保存PNG或直接分享。"
                 : exportState === "saved"
                   ? "一图流PNG已保存。"
                   : exportState === "shared"

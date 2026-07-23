@@ -1017,7 +1017,8 @@ footer a:hover {
   height: 30px;
   padding: 7px 9px;
   position: absolute;
-  right: 12px;
+  right: auto;
+  left: 12px;
   bottom: 12px;
   z-index: 2;
   display: flex;
@@ -1106,11 +1107,10 @@ footer a:hover {
 
 .song-actions {
   display: grid;
-  grid-template-columns: 0.9fr 1.1fr;
+  grid-template-columns: 1fr;
   gap: 6px;
 }
 
-.preview-button,
 .pick-label {
   height: 34px;
   padding: 0 10px;
@@ -1125,25 +1125,6 @@ footer a:hover {
   pointer-events: none;
 }
 
-.preview-button {
-  position: relative;
-  z-index: 4;
-  color: #aab4c2;
-  background: rgba(255, 255, 255, 0.055);
-}
-
-.preview-button:hover:not(:disabled),
-.song-card.is-playing .preview-button {
-  color: white;
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-}
-
-.preview-button:disabled {
-  color: #596270;
-  cursor: not-allowed;
-  background: rgba(255, 255, 255, 0.025);
-}
-
 .pick-label {
   pointer-events: none;
   color: var(--accent);
@@ -1156,6 +1137,64 @@ footer a:hover {
   color: var(--ink);
   background: var(--accent);
   outline: none;
+}
+
+.cover-preview-button {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 58%, white);
+  border-radius: 50%;
+  color: var(--accent);
+  background: rgba(9, 11, 17, 0.82);
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.38),
+    0 0 18px color-mix(in srgb, var(--accent) 15%, transparent);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    transform 150ms ease,
+    color 150ms ease,
+    background 150ms ease;
+}
+
+.cover-preview-button:hover:not(:disabled),
+.cover-preview-button:focus-visible,
+.song-card.is-playing .cover-preview-button {
+  color: var(--ink);
+  background: var(--accent);
+  transform: scale(1.08);
+  outline: none;
+}
+
+.cover-preview-button:focus-visible {
+  box-shadow:
+    0 0 0 3px var(--ink),
+    0 0 0 5px var(--accent);
+}
+
+.cover-preview-button:disabled {
+  color: #67707d;
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(9, 11, 17, 0.74);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.preview-triangle {
+  width: 0;
+  height: 0;
+  margin-left: 3px;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 11px solid currentColor;
 }
 
 .keyboard-hint {
@@ -2771,4 +2810,100 @@ kbd {
     border-radius: 0;
     box-shadow: none;
   }
+}
+
+/* Fixed 1080px export layout. Kept off-screen so the visible mobile view does not jump. */
+
+.poster-export-host {
+  width: 1080px;
+  position: fixed;
+  top: 0;
+  left: -20000px;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.tournament-poster.poster-export-layout {
+  width: 1080px !important;
+  max-width: none !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+}
+
+.poster-export-layout .poster-hero {
+  min-height: 630px;
+  padding: 46px 56px 54px;
+}
+
+.poster-export-layout .poster-hero::after {
+  top: 82px;
+  font-size: 260px;
+}
+
+.poster-export-layout .poster-hero h1 {
+  max-width: 800px;
+  font-size: 96px;
+}
+
+.poster-export-layout .poster-hero p br {
+  display: initial;
+}
+
+.poster-export-layout .poster-hero-bottom {
+  align-items: flex-end;
+  flex-direction: row;
+}
+
+.poster-export-layout .poster-stats {
+  justify-content: flex-start;
+  gap: 40px;
+}
+
+.poster-export-layout .poster-qr {
+  align-self: auto;
+}
+
+.poster-export-layout .poster-champion {
+  padding: 54px;
+  flex-direction: row;
+  text-align: left;
+}
+
+.poster-export-layout .poster-champion > img {
+  width: 220px;
+  height: 220px;
+}
+
+.poster-export-layout .poster-crown {
+  top: 30px;
+  left: calc(50% - 45px);
+  transform: rotate(-8deg);
+}
+
+.poster-export-layout .poster-section {
+  padding: 54px;
+}
+
+.poster-export-layout .poster-section-heading {
+  grid-template-columns: 50px minmax(0, 1fr) auto;
+}
+
+.poster-export-layout .poster-section-heading > p {
+  grid-column: auto;
+  padding-bottom: 0;
+}
+
+.poster-export-layout .poster-roster-groups,
+.poster-export-layout .poster-matches {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.poster-export-layout .poster-footer {
+  padding: 42px 54px;
+  align-items: center;
+  flex-direction: row;
+}
+
+.poster-export-layout .poster-footer p {
+  text-align: right;
 }

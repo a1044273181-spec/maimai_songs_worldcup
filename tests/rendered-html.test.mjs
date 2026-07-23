@@ -80,6 +80,10 @@ test("battle UI implements immediate preview and the full tournament poster", as
   assert.match(page, /className="tournament-poster"/);
   assert.match(page, /src="\/site-qr\.png"/);
   assert.match(page, /import\("html-to-image"\)/);
+  assert.match(page, /POSTER_EXPORT_WIDTH = 1080/);
+  assert.match(page, /canvasWidth: POSTER_EXPORT_WIDTH/);
+  assert.match(page, /pixelRatio: 1/);
+  assert.match(page, /className = "poster-export-host"/);
   assert.match(page, /className="export-button"/);
   assert.match(page, /navigator\.canShare\(\{ files: \[file\] \}\)/);
   assert.match(page, /posterBlobRef = useRef<Blob/);
@@ -87,7 +91,7 @@ test("battle UI implements immediate preview and the full tournament poster", as
   assert.match(page, /downloadPoster\(blob, posterFileName\(\)\)/);
   assert.match(page, /className="card-select-button"/);
   assert.match(page, /onClick=\{\(\) => onChoose\(song\)\}/);
-  assert.match(page, /className="preview-button"/);
+  assert.match(page, /className="cover-preview-button"/);
   assert.match(page, /stopPreview\(\)/);
   assert.match(page, /立即试听/);
   assert.match(page, /暂无试听/);
