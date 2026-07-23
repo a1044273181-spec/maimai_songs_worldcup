@@ -3,23 +3,29 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Song = {
-  id: number;
+  id: string;
   title: string;
   artist: string;
   genre: string;
   bpm: number;
-  version: number;
+  version: string;
+  cover: string;
 };
 
 type Version = {
-  id: number;
   title: string;
-  version: number;
+  version: string;
+  abbr: string;
+  releaseDate: string;
+  era: "classic" | "dx";
+  icon: string;
 };
 
 type Catalog = {
   updatedAt: string;
   source: string;
+  region: "cn";
+  versionRule: "song.version";
   versions: Version[];
   songs: Song[];
 };
@@ -37,13 +43,8 @@ type BattleRound = {
   automaticWinners: Song[];
 };
 
-const RESULTS_KEY = "mai-cup-results-v1";
+const RESULTS_KEY = "mai-cup-results-v2";
 const palette = ["cyan", "lime", "pink", "violet", "orange"];
-
-function coverUrl(id: number) {
-  const coverId = id > 10000 && id <= 11000 ? id - 10000 : id;
-  return `https://www.diving-fish.com/covers/${String(coverId).padStart(5, "0")}.png`;
-}
 
 function shuffle<T>(items: T[]) {
   const next = [...items];
@@ -85,8 +86,19 @@ function estimatedChoices(songCount: number) {
   return choices;
 }
 
-function shortVersion(title: string) {
-  return title.replace("舞萌DX ", "DX ").replace("舞萌DX", "DX");
+function songTone(song: Song, index: number) {
+  let hash = 0;
+  for (const character of song.id) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+  return palette[(hash + index) % palette.length];
+}
+
+function displayTitle(version: Version) {
+  if (version.version === "maimaiでらっくす") return "maimai でらっくす";
+  if (version.version === "maimaiでらっくす PLUS")
+    return "maimai でらっくす PLUS";
+  return version.title;
 }
 
 export default function Home() {
@@ -101,7 +113,7 @@ export default function Home() {
   const [groupIndex, setGroupIndex] = useState(0);
   const [roundWinners, setRoundWinners] = useState<Song[]>([]);
   const [champion, setChampion] = useState<Song | null>(null);
-  const [imageErrors, setImageErrors] = useState<Record<number, true>>({});
+  const [imageErrors, setImageErrors] = useState<Record<string, true>>({});
 
   useEffect(() => {
     fetch("/maimai-cn.json")
@@ -116,12 +128,12 @@ export default function Home() {
       const stored = window.localStorage.getItem(RESULTS_KEY);
       if (stored) setResults(JSON.parse(stored));
     } catch {
-      // Local results are optional; a disabled storage policy should not block play.
+      // 本地存储不可用时仍可继续完成当前决战。
     }
   }, []);
 
   const songCounts = useMemo(() => {
-    const counts = new Map<number, number>();
+    const counts = new Map<string, number>();
     catalog?.songs.forEach((song) => {
       counts.set(song.version, (counts.get(song.version) ?? 0) + 1);
     });
@@ -132,12 +144,11 @@ export default function Home() {
     if (!catalog) return [];
     const normalizedQuery = query.trim().toLowerCase();
     return catalog.versions.filter((version) => {
-      const isDx = version.version >= 20000;
-      if (filter === "dx" && !isDx) return false;
-      if (filter === "classic" && isDx) return false;
+      if (filter !== "all" && version.era !== filter) return false;
       return (
         !normalizedQuery ||
-        version.title.toLowerCase().includes(normalizedQuery)
+        version.title.toLowerCase().includes(normalizedQuery) ||
+        version.abbr.toLowerCase().includes(normalizedQuery)
       );
     });
   }, [catalog, filter, query]);
@@ -193,7 +204,7 @@ export default function Home() {
         };
         const nextResults = {
           ...results,
-          [String(selectedVersion.version)]: record,
+          [selectedVersion.version]: record,
         };
         setResults(nextResults);
         setChampion(winners[0]);
@@ -201,7 +212,7 @@ export default function Home() {
         try {
           window.localStorage.setItem(RESULTS_KEY, JSON.stringify(nextResults));
         } catch {
-          // The result still remains available for this session.
+          // 结果仍会保留至本次会话结束。
         }
       } else {
         beginRound(winners, round.number + 1);
@@ -237,7 +248,7 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const reportImageError = (id: number) => {
+  const reportImageError = (id: string) => {
     setImageErrors((current) => ({ ...current, [id]: true }));
   };
 
@@ -262,7 +273,7 @@ export default function Home() {
           <span />
           <span />
         </div>
-        <p>正在装载国服曲库…</p>
+        <p>正在装载中国版曲库…</p>
       </main>
     );
   }
@@ -273,11 +284,15 @@ export default function Home() {
     return (
       <main className="battle-page">
         <header className="battle-header">
-          <button className="icon-button" onClick={goHome} aria-label="返回版本选择">
+          <button
+            className="icon-button"
+            onClick={goHome}
+            aria-label="返回版本选择"
+          >
             ←
           </button>
           <div className="battle-heading">
-            <strong>{selectedVersion.title}</strong>
+            <strong>{displayTitle(selectedVersion)}</strong>
             <span>
               ROUND {String(round.number).padStart(2, "0")} ·{" "}
               {round.participantCount} 首在场
@@ -313,8 +328,8 @@ export default function Home() {
           <div className={`song-grid song-count-${currentGroup.length}`}>
             {currentGroup.map((song, index) => (
               <button
-                className={`song-card tone-${palette[(song.id + index) % palette.length]}`}
-                key={`${song.id}-${song.version}`}
+                className={`song-card tone-${songTone(song, index)}`}
+                key={song.id}
                 onClick={() => chooseSong(song)}
                 aria-label={`选择 ${song.title}，${song.artist}`}
               >
@@ -322,7 +337,7 @@ export default function Home() {
                 <span className="cover-wrap">
                   {!imageErrors[song.id] ? (
                     <img
-                      src={coverUrl(song.id)}
+                      src={song.cover}
                       alt=""
                       loading="eager"
                       onError={() => reportImageError(song.id)}
@@ -343,14 +358,15 @@ export default function Home() {
                   </span>
                 </span>
                 <span className="pick-label">
-                  选它晋级 <span>↗</span>
+                  选它晋级 <span>→</span>
                 </span>
               </button>
             ))}
           </div>
 
           <p className="keyboard-hint">
-            键盘玩家可按 <kbd>1</kbd> – <kbd>{currentGroup.length}</kbd> 快速选择
+            键盘玩家可按 <kbd>1</kbd> – <kbd>{currentGroup.length}</kbd>{" "}
+            快速选择
           </p>
         </section>
       </main>
@@ -373,7 +389,7 @@ export default function Home() {
           <div className="champion-cover">
             {!imageErrors[champion.id] ? (
               <img
-                src={coverUrl(champion.id)}
+                src={champion.cover}
                 alt={`${champion.title} 封面`}
                 onError={() => reportImageError(champion.id)}
               />
@@ -382,7 +398,7 @@ export default function Home() {
             )}
             <span className="crown">♛</span>
           </div>
-          <p className="champion-version">{selectedVersion.title}</p>
+          <p className="champion-version">{displayTitle(selectedVersion)}</p>
           <h1>{champion.title}</h1>
           <p className="champion-artist">{champion.artist}</p>
           <div className="champion-stats">
@@ -403,16 +419,20 @@ export default function Home() {
               挑战其他版本
             </button>
           </div>
-          <p className="saved-note">冠军结果已保存在这台设备上</p>
+          <p className="saved-note">冠军结果已保存在这台设备中</p>
         </section>
       </main>
     );
   }
 
-  const completedCount = Object.keys(results).length;
+  const completedCount = Object.keys(results).filter((key) =>
+    catalog.versions.some((version) => version.version === key),
+  ).length;
   const featuredVersion =
-    catalog.versions.find((version) => version.version === 25500) ??
-    catalog.versions[catalog.versions.length - 1];
+    [...catalog.versions]
+      .reverse()
+      .find((version) => (songCounts.get(version.version) ?? 0) > 0) ??
+    catalog.versions[0];
   const featuredSongs = songCounts.get(featuredVersion.version) ?? 0;
 
   return (
@@ -430,14 +450,15 @@ export default function Home() {
           </span>
         </a>
         <div className="header-status">
-          <span>{completedCount}</span> / {catalog.versions.length} 个版本已决出冠军
+          <span>{completedCount}</span> / {catalog.versions.length}{" "}
+          个版本已决出冠军
         </div>
       </header>
 
       <section className="hero" id="top">
         <div className="hero-copy">
           <span className="eyebrow">
-            MAIMAI CN VERSION · {catalog.updatedAt.replaceAll("-", ".")}
+            MAIMAI CHINA · {catalog.updatedAt.replaceAll("-", ".")}
           </span>
           <h1>
             每个时代，
@@ -445,18 +466,18 @@ export default function Home() {
             只有<span>一首</span>能登顶。
           </h1>
           <p>
-            以舞萌国服曲库为准，按收录版本逐轮决战。
+            以 Arcade Songs 的中国版（舞萌 DX）可用曲目为准，
             <br />
-            从初代到 DX 2026，选出你心中的版本冠军。
+            按歌曲首发版本严格分组，选出你的版本冠军。
           </p>
           <div className="hero-stats">
             <span>
               <strong>{catalog.songs.length}</strong>
-              当前曲目
+              中国版曲目
             </span>
             <span>
               <strong>{catalog.versions.length}</strong>
-              国服版本
+              历代版本
             </span>
             <span>
               <strong>{completedCount}</strong>
@@ -466,20 +487,20 @@ export default function Home() {
         </div>
 
         <aside className="quick-start">
-          <div className="quick-disc" aria-hidden="true">
-            <span>DX</span>
-            <i />
+          <div className="quick-version-art" aria-hidden="true">
+            <img src={featuredVersion.icon} alt="" />
           </div>
-          <span className="quick-label">QUICK START · 最新版本</span>
-          <h2>{featuredVersion.title}</h2>
+          <span className="quick-label">QUICK START · 最新可战版本</span>
+          <h2>{displayTitle(featuredVersion)}</h2>
           <p>
-            {featuredSongs} 首参赛 · 预计 {estimatedChoices(featuredSongs)} 次选择
+            {featuredSongs} 首参赛 · 预计 {estimatedChoices(featuredSongs)}{" "}
+            次选择
           </p>
           <button
             className="primary-button"
             onClick={() => startBattle(featuredVersion)}
           >
-            立即开赛 <span>→</span>
+            立即开启 <span>→</span>
           </button>
         </aside>
       </section>
@@ -488,7 +509,7 @@ export default function Home() {
         <div className="section-heading">
           <div>
             <span className="eyebrow">CHOOSE YOUR ERA</span>
-            <h2>选择一个版本开赛</h2>
+            <h2>选择一个版本开战</h2>
           </div>
           <label className="search-field">
             <span>⌕</span>
@@ -521,26 +542,31 @@ export default function Home() {
         <div className="version-grid">
           {visibleVersions.map((version, index) => {
             const count = songCounts.get(version.version) ?? 0;
-            const result = results[String(version.version)];
-            const era = version.version >= 20000 ? "DX ERA" : "CLASSIC";
+            const result = results[version.version];
+            const disabled = count === 0;
             return (
               <article
                 className={`version-card accent-${palette[index % palette.length]} ${
                   result ? "completed" : ""
-                }`}
+                } ${disabled ? "disabled" : ""}`}
                 key={version.version}
               >
                 <div className="version-card-top">
-                  <span>{era}</span>
+                  <span>{version.era === "dx" ? "DX ERA" : "CLASSIC"}</span>
                   <span>{String(index + 1).padStart(2, "0")}</span>
                 </div>
-                <div className="mini-disc" aria-hidden="true">
-                  <i />
-                  <span>{version.version >= 20000 ? "DX" : "mai"}</span>
+                <div
+                  className={`version-art version-art-${version.era}`}
+                  aria-hidden="true"
+                >
+                  <img src={version.icon} alt="" loading="lazy" />
                 </div>
-                <h3>{shortVersion(version.title)}</h3>
+                <h3>{displayTitle(version)}</h3>
                 <p>
-                  {count} 首参赛 · 约 {estimatedChoices(count)} 次选择
+                  {count} 首参赛
+                  {count > 0
+                    ? ` · 约 ${estimatedChoices(count)} 次选择`
+                    : " · 暂无中国版曲目"}
                 </p>
                 {result ? (
                   <div className="version-winner">
@@ -549,12 +575,18 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="version-winner empty">
-                    <span>等待开赛</span>
-                    <strong>尚未决出冠军</strong>
+                    <span>{disabled ? "尚未开放" : "等待开启"}</span>
+                    <strong>
+                      {disabled ? "中国版暂无可用曲目" : "尚未决出冠军"}
+                    </strong>
                   </div>
                 )}
-                <button onClick={() => startBattle(version)}>
-                  {result ? "重新决战" : "开始决战"} <span>↗</span>
+                <button
+                  onClick={() => startBattle(version)}
+                  disabled={disabled}
+                >
+                  {disabled ? "暂不可战" : result ? "重新决战" : "开始决战"}{" "}
+                  <span>→</span>
                 </button>
               </article>
             );
@@ -574,13 +606,13 @@ export default function Home() {
         <ol>
           <li>
             <span>01</span>
-            <strong>按国服版本分组</strong>
-            <p>只比较同一国服收录版本的现行可用曲目。</p>
+            <strong>严格按首发版本分组</strong>
+            <p>每首中国版可用曲目只归入 Arcade Songs 标记的歌曲版本。</p>
           </li>
           <li>
             <span>02</span>
             <strong>每组只留一首</strong>
-            <p>每轮随机分为 2–4 首一组，你的选择决定晋级。</p>
+            <p>每轮随机分成 2–4 首一组，你的选择决定晋级。</p>
           </li>
           <li>
             <span>03</span>
@@ -601,7 +633,23 @@ export default function Home() {
           </span>
         </div>
         <p>
-          曲库数据来自 LXNS 国服公开接口，封面由 Diving-Fish 提供。非世嘉官方产品。
+          曲库与封面来自{" "}
+          <a
+            href="https://arcade-songs.zetaraku.dev/maimai/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Arcade Songs
+          </a>
+          ，按“中国版（舞萌 DX）”筛选；旧框头像与 DX 版本标志参考{" "}
+          <a
+            href="https://maimai.fandom.com/zh/wiki/%E9%A0%AD%E5%83%8F%E4%B8%80%E8%A6%BD"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Maimai Wiki
+          </a>
+          。非世嘉官方产品。
         </p>
       </footer>
     </main>
