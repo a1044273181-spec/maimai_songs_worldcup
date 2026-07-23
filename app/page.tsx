@@ -176,7 +176,19 @@ export default function Home() {
   const [previewErrors, setPreviewErrors] = useState<Record<string, true>>({});
   const [playingSongId, setPlayingSongId] = useState<string | null>(null);
   const [previewSeconds, setPreviewSeconds] = useState(PREVIEW_LIMIT_SECONDS);
+  const [exportState, setExportState] = useState<
+    | "idle"
+    | "rendering"
+    | "ready"
+    | "saved"
+    | "shared"
+    | "fallback"
+    | "error"
+  >("idle");
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const posterRef = useRef<HTMLElement | null>(null);
+  const posterBlobRef = useRef<Blob | null>(null);
+  const exportBusyRef = useRef(false);
 
   useEffect(() => {
     fetch("/maimai-cn.json")
@@ -544,6 +556,138 @@ export default function Home() {
     setImageErrors((current) => ({ ...current, [id]: true }));
   }
 
+  function downloadPoster(blob: Blob, fileName: string) {
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    requestAnimationFrame(() => URL.revokeObjectURL(objectUrl));
+  }
+
+  async function createPosterBlob() {
+    const poster = posterRef.current;
+    if (!poster) throw new Error("poster");
+
+    await document.fonts?.ready;
+    const images = Array.from(poster.querySelectorAll("img"));
+    await Promise.all(
+      images.map((image) =>
+        typeof image.decode === "function"
+          ? image.decode().catch(() => undefined)
+          : Promise.resolve(),
+      ),
+    );
+
+    const { toBlob } = await import("html-to-image");
+    const posterHeight = poster.scrollHeight;
+    const pixelRatio =
+      posterHeight > 12000 ? 1 : posterHeight > 8000 ? 1.5 : 2;
+    const blob = await toBlob(poster, {
+      backgroundColor: "#0b0a12",
+      cacheBust: true,
+      pixelRatio,
+      imagePlaceholder:
+        "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=",
+    });
+    if (!blob) throw new Error("image");
+    return blob;
+  }
+
+  function posterFileName() {
+    const versionName = selectedVersion?.title ?? "舞萌";
+    return `mai-CUP-${versionName}-比赛一图流.png`;
+  }
+
+  async function savePosterImage() {
+    if (exportBusyRef.current) return;
+    exportBusyRef.current = true;
+    setExportState("rendering");
+    try {
+      const blob = posterBlobRef.current ?? (await createPosterBlob());
+      posterBlobRef.current = blob;
+      downloadPoster(blob, posterFileName());
+      setExportState("saved");
+    } catch {
+      setExportState("error");
+    } finally {
+      exportBusyRef.current = false;
+    }
+  }
+
+  async function sharePosterImage() {
+    if (exportBusyRef.current) return;
+    const blob = posterBlobRef.current;
+    if (!blob) {
+      setExportState("error");
+      return;
+    }
+    exportBusyRef.current = true;
+    try {
+      const file = new File([blob], posterFileName(), { type: "image/png" });
+      const supportsFileShare =
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] });
+
+      if (supportsFileShare) {
+        await navigator.share({
+          files: [file],
+          title: `${selectedVersion?.title ?? "舞萌"} · mai:CUP 比赛一图流`,
+          text: "这是我的舞萌版本本命曲比赛结果。",
+        });
+        setExportState("shared");
+      } else {
+        downloadPoster(blob, posterFileName());
+        setExportState("fallback");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setExportState("idle");
+      } else {
+        setExportState("error");
+      }
+    } finally {
+      exportBusyRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (phase !== "overview") {
+      posterBlobRef.current = null;
+      setExportState("idle");
+      return;
+    }
+
+    let cancelled = false;
+    const frame = requestAnimationFrame(async () => {
+      exportBusyRef.current = true;
+      setExportState("rendering");
+      try {
+        const blob = await createPosterBlob();
+        if (cancelled) return;
+        posterBlobRef.current = blob;
+        setExportState("ready");
+      } catch {
+        if (!cancelled) setExportState("error");
+      } finally {
+        exportBusyRef.current = false;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [
+    phase,
+    history.length,
+    champion?.id,
+    selectedVersion?.version,
+  ]);
+
   function renderSongCards(
     songs: Song[],
     onChoose: (song: Song) => void,
@@ -892,11 +1036,53 @@ export default function Home() {
               <span className="eyebrow">FULL TOURNAMENT</span>
               <strong>{selectedVersion.title} · 一图流赛程</strong>
             </div>
-            <button className="text-button" onClick={goHome}>
-              全部版本
-            </button>
+            <div className="overview-actions">
+              <button
+                className="export-button"
+                type="button"
+                disabled={
+                  exportState === "rendering" || exportState === "idle"
+                }
+                onClick={savePosterImage}
+              >
+                {exportState === "rendering" ? "生成中…" : "保存图片"}
+              </button>
+              <button
+                className="export-button share-button"
+                type="button"
+                disabled={
+                  exportState === "rendering" ||
+                  exportState === "idle" ||
+                  !posterBlobRef.current
+                }
+                onClick={sharePosterImage}
+              >
+                分享图片
+              </button>
+              <button className="text-button" onClick={goHome}>
+                全部版本
+              </button>
+            </div>
           </header>
-          <article className="tournament-poster">
+          {exportState !== "idle" && (
+            <p
+              className={`export-status export-status-${exportState}`}
+              role="status"
+            >
+              {exportState === "rendering"
+                ? "正在生成完整长图，歌曲较多时需要稍等片刻…"
+                : exportState === "ready"
+                  ? "完整一图流已经生成，可以保存PNG或直接分享。"
+                : exportState === "saved"
+                  ? "一图流PNG已保存。"
+                  : exportState === "shared"
+                    ? "一图流已经发送到系统分享面板。"
+                    : exportState === "fallback"
+                      ? "当前浏览器不支持直接分享图片，PNG已保存，请从相册或下载目录分享。"
+                      : "图片生成失败，请确认歌曲封面加载完成后重试。"}
+            </p>
+          )}
+          <article className="tournament-poster" ref={posterRef}>
             <section className="poster-hero">
               <div className="poster-brand">
                 <span className="brand-disc">

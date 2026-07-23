@@ -1814,6 +1814,72 @@ kbd {
   font-size: 14px;
 }
 
+.overview-actions {
+  justify-self: end;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+.export-button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(143, 99, 255, 0.42);
+  border-radius: 999px;
+  color: #d9d4ff;
+  background: rgba(143, 99, 255, 0.12);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 900;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.export-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--violet);
+  background: rgba(143, 99, 255, 0.22);
+}
+
+.export-button.share-button {
+  color: var(--ink);
+  border-color: var(--pink);
+  background: linear-gradient(90deg, var(--violet), var(--pink));
+}
+
+.export-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.export-status {
+  width: min(1120px, calc(100% - 32px));
+  min-height: 42px;
+  margin: 18px auto -16px;
+  padding: 11px 16px;
+  border: 1px solid rgba(34, 231, 242, 0.24);
+  border-radius: 12px;
+  color: #b7c0ce;
+  background: rgba(17, 21, 29, 0.92);
+  text-align: center;
+  font-size: 10px;
+}
+
+.export-status-saved,
+.export-status-shared,
+.export-status-ready {
+  color: var(--lime);
+  border-color: rgba(184, 242, 74, 0.28);
+}
+
+.export-status-error {
+  color: #ff9a9a;
+  border-color: rgba(255, 92, 92, 0.3);
+}
+
 .overview-champion {
   padding: 54px 24px 32px;
   display: flex;
@@ -2074,6 +2140,20 @@ kbd {
 
   .overview-header .text-button {
     font-size: 9px;
+  }
+
+  .overview-actions {
+    gap: 4px !important;
+  }
+
+  .export-button {
+    min-height: 32px;
+    padding: 0 9px;
+    font-size: 8px;
+  }
+
+  .overview-actions .text-button {
+    display: none;
   }
 
   .overview-champion-main {
