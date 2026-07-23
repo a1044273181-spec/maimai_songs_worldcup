@@ -2,28 +2,28 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "mai:CUP｜舞萌 DX 中国版年度本命曲决战",
+  title: "mai:CUP｜舞萌中国版歌曲淘汰赛",
   description:
-    "按舞萌中国版年度曲库分组，从舞萌 DX 到舞萌 DX 2026，试听 30 秒后逐轮选出最喜欢的一首。",
+    "按舞萌中国版曲库展开小组赛、淘汰复活与一对一淘汰赛，试听30秒后选出每个版本的唯一冠军。",
   openGraph: {
-    title: "mai:CUP｜每个中国版年度，只有一首能登顶",
+    title: "mai:CUP｜从小组赛一路战到总决赛",
     description:
-      "从经典旧框到舞萌 DX 2026，试听并选出你的版本本命曲。",
+      "从经典旧框到舞萌DX 2026，经历小组赛、复活赛与淘汰赛，选出你的版本本命曲。",
     type: "website",
     images: [
       {
         url: "/og.png",
         width: 1731,
         height: 909,
-        alt: "mai:CUP 舞萌 DX 中国版年度本命曲决战",
+        alt: "mai:CUP 舞萌中国版歌曲淘汰赛",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "mai:CUP｜舞萌 DX 中国版年度本命曲决战",
+    title: "mai:CUP｜舞萌中国版歌曲淘汰赛",
     description:
-      "从经典旧框到舞萌 DX 2026，试听并选出你的版本本命曲。",
+      "小组赛双选、淘汰复活、一对一淘汰，决出你的舞萌版本本命曲。",
     images: ["/og.png"],
   },
 };

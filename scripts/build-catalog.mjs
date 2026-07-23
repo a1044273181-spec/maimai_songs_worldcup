@@ -87,7 +87,9 @@ for (const program of radioPrograms) {
   radioByMaimaiId.set(Number(match[1]), program);
 }
 
-const songs = lxns.songs.map((song) => {
+const songs = lxns.songs
+  .filter((song) => song.genre !== "宴会場")
+  .map((song) => {
   const radioProgram = radioByMaimaiId.get(song.id);
   return {
     id: String(song.id),
@@ -101,7 +103,7 @@ const songs = lxns.songs.map((song) => {
       ? `https://music.163.com/song/media/outer/url?id=${radioProgram.mainSong.id}.mp3`
       : null,
   };
-});
+  });
 
 const catalog = {
   updatedAt: new Date().toISOString().slice(0, 10),

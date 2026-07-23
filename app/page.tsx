@@ -43,14 +43,36 @@ type WinnerRecord = {
   decidedAt: string;
 };
 
-type BattleRound = {
+type Phase =
+  | "home"
+  | "roster"
+  | "group"
+  | "revival"
+  | "knockout"
+  | "champion"
+  | "overview";
+
+type HistoryRecord = {
+  id: string;
+  stageLabel: string;
+  detail: string;
+  participants: Song[];
+  winners: Song[];
+};
+
+type KnockoutRound = {
   number: number;
+  label: string;
   participantCount: number;
-  groups: Song[][];
+  matches: Song[][];
   automaticWinners: Song[];
 };
 
-const RESULTS_KEY = "mai-cup-results-v3";
+const RESULTS_KEY = "mai-cup-results-v4";
+const GROUP_SIZE = 4;
+const GROUP_PICKS = 2;
+const PREVIEW_DELAY_MS = 500;
+const PREVIEW_LIMIT_SECONDS = 30;
 const palette = ["cyan", "lime", "pink", "violet", "orange"];
 
 function shuffle<T>(items: T[]) {
@@ -62,35 +84,61 @@ function shuffle<T>(items: T[]) {
   return next;
 }
 
-function buildRound(participants: Song[], number: number): BattleRound {
-  const mixed = shuffle(participants);
-  const groups: Song[][] = [];
-  const automaticWinners: Song[] = [];
-
-  for (let index = 0; index < mixed.length; index += 4) {
-    const group = mixed.slice(index, index + 4);
-    if (group.length === 1) automaticWinners.push(group[0]);
-    else groups.push(group);
+function chunk<T>(items: T[], size: number) {
+  const groups: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    groups.push(items.slice(index, index + size));
   }
+  return groups;
+}
+
+function buildRevivalGroups(items: Song[], groupCount: number) {
+  const groups = Array.from({ length: groupCount }, () => [] as Song[]);
+  shuffle(items).forEach((song, index) => {
+    groups[index % groupCount].push(song);
+  });
+  return groups.filter((group) => group.length);
+}
+
+function buildInitialGroups(items: Song[]) {
+  const groupCount = Math.ceil(items.length / GROUP_SIZE);
+  const groups = Array.from({ length: groupCount }, () => [] as Song[]);
+  shuffle(items).forEach((song, index) => {
+    groups[index % groupCount].push(song);
+  });
+  return groups.filter((group) => group.length);
+}
+
+function buildKnockoutRound(
+  participants: Song[],
+  number: number,
+): KnockoutRound {
+  const mixed = shuffle(participants);
+  const participantCount = mixed.length;
+  const lowerPower = 2 ** Math.floor(Math.log2(participantCount));
+  const pairCount =
+    participantCount === lowerPower
+      ? participantCount / 2
+      : participantCount - lowerPower;
+  const pairedSongCount = pairCount * 2;
+  const matches = chunk(mixed.slice(0, pairedSongCount), 2);
+  const automaticWinners = mixed.slice(pairedSongCount);
+  const label =
+    participantCount === 8
+      ? "四分之一决赛"
+      : participantCount === 4
+        ? "半决赛"
+        : participantCount === 2
+          ? "总决赛"
+          : `淘汰赛第 ${number} 轮`;
 
   return {
     number,
-    participantCount: participants.length,
-    groups,
+    label,
+    participantCount,
+    matches,
     automaticWinners,
   };
-}
-
-function estimatedChoices(songCount: number) {
-  let participants = songCount;
-  let choices = 0;
-  while (participants > 1) {
-    const completeGroups = Math.floor(participants / 4);
-    const remainder = participants % 4;
-    choices += completeGroups + (remainder > 1 ? 1 : 0);
-    participants = completeGroups + (remainder ? 1 : 0);
-  }
-  return choices;
 }
 
 function songTone(song: Song, index: number) {
@@ -107,17 +155,30 @@ export default function Home() {
   const [filter, setFilter] = useState<"all" | "dx" | "classic">("all");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Record<string, WinnerRecord>>({});
+  const [phase, setPhase] = useState<Phase>("home");
   const [selectedVersion, setSelectedVersion] = useState<Version | null>(null);
-  const [phase, setPhase] = useState<"home" | "battle" | "champion">("home");
-  const [round, setRound] = useState<BattleRound | null>(null);
+  const [entrants, setEntrants] = useState<Song[]>([]);
+  const [groupStageGroups, setGroupStageGroups] = useState<Song[][]>([]);
   const [groupIndex, setGroupIndex] = useState(0);
-  const [roundWinners, setRoundWinners] = useState<Song[]>([]);
+  const [groupPicks, setGroupPicks] = useState<string[]>([]);
+  const [groupQualified, setGroupQualified] = useState<Song[]>([]);
+  const [groupEliminated, setGroupEliminated] = useState<Song[]>([]);
+  const [revivalGroups, setRevivalGroups] = useState<Song[][]>([]);
+  const [revivalIndex, setRevivalIndex] = useState(0);
+  const [revivedSongs, setRevivedSongs] = useState<Song[]>([]);
+  const [knockoutRound, setKnockoutRound] =
+    useState<KnockoutRound | null>(null);
+  const [matchIndex, setMatchIndex] = useState(0);
+  const [knockoutWinners, setKnockoutWinners] = useState<Song[]>([]);
+  const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [champion, setChampion] = useState<Song | null>(null);
   const [imageErrors, setImageErrors] = useState<Record<string, true>>({});
   const [previewErrors, setPreviewErrors] = useState<Record<string, true>>({});
+  const [preparingSongId, setPreparingSongId] = useState<string | null>(null);
   const [playingSongId, setPlayingSongId] = useState<string | null>(null);
-  const [previewSeconds, setPreviewSeconds] = useState(30);
+  const [previewSeconds, setPreviewSeconds] = useState(PREVIEW_LIMIT_SECONDS);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetch("/maimai-cn.json")
@@ -132,35 +193,44 @@ export default function Home() {
       const stored = window.localStorage.getItem(RESULTS_KEY);
       if (stored) setResults(JSON.parse(stored));
     } catch {
-      // 本地存储不可用时仍可继续完成当前决战。
+      // 本地存储不可用时仍可完成本次比赛。
     }
   }, []);
 
   const stopPreview = useCallback(() => {
+    if (previewTimerRef.current) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
     const audio = audioRef.current;
     if (audio) {
       audio.pause();
-      try {
-        audio.currentTime = 0;
-      } catch {
-        // 音频尚未载入时无需重置进度。
-      }
+      audio.ontimeupdate = null;
+      audio.onended = null;
+      audio.onerror = null;
+      audio.removeAttribute("src");
+      audio.load();
     }
+    setPreparingSongId(null);
     setPlayingSongId(null);
-    setPreviewSeconds(30);
+    setPreviewSeconds(PREVIEW_LIMIT_SECONDS);
   }, []);
 
   useEffect(
     () => () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
       audioRef.current?.pause();
     },
     [],
   );
 
   const togglePreview = useCallback(
-    async (song: Song) => {
+    (song: Song) => {
       if (!song.preview || previewErrors[song.id]) return;
-      if (playingSongId === song.id) {
+      if (
+        preparingSongId === song.id ||
+        playingSongId === song.id
+      ) {
         stopPreview();
         return;
       }
@@ -168,16 +238,22 @@ export default function Home() {
       stopPreview();
       const audio = audioRef.current ?? new Audio();
       audioRef.current = audio;
-      audio.preload = "none";
+      audio.preload = "auto";
       audio.volume = 0.8;
       audio.src = song.preview;
       audio.currentTime = 0;
+      audio.load();
       audio.ontimeupdate = () => {
-        if (audio.currentTime >= 30) {
+        if (audio.currentTime >= PREVIEW_LIMIT_SECONDS) {
           stopPreview();
           return;
         }
-        setPreviewSeconds(Math.max(0, 30 - Math.floor(audio.currentTime)));
+        setPreviewSeconds(
+          Math.max(
+            0,
+            PREVIEW_LIMIT_SECONDS - Math.floor(audio.currentTime),
+          ),
+        );
       };
       audio.onended = stopPreview;
       audio.onerror = () => {
@@ -185,16 +261,25 @@ export default function Home() {
         stopPreview();
       };
 
-      setPlayingSongId(song.id);
-      setPreviewSeconds(30);
-      try {
-        await audio.play();
-      } catch {
-        setPreviewErrors((current) => ({ ...current, [song.id]: true }));
-        stopPreview();
-      }
+      setPreparingSongId(song.id);
+      previewTimerRef.current = setTimeout(async () => {
+        previewTimerRef.current = null;
+        try {
+          await audio.play();
+          setPreparingSongId(null);
+          setPlayingSongId(song.id);
+        } catch {
+          setPreviewErrors((current) => ({ ...current, [song.id]: true }));
+          stopPreview();
+        }
+      }, PREVIEW_DELAY_MS);
     },
-    [playingSongId, previewErrors, stopPreview],
+    [
+      playingSongId,
+      preparingSongId,
+      previewErrors,
+      stopPreview,
+    ],
   );
 
   const songCounts = useMemo(() => {
@@ -218,117 +303,358 @@ export default function Home() {
     });
   }, [catalog, filter, query]);
 
-  const currentGroup = round?.groups[groupIndex] ?? [];
-  const totalGroups = round?.groups.length ?? 0;
+  const overviewStages = useMemo(() => {
+    const stages: { label: string; records: HistoryRecord[] }[] = [];
+    history.forEach((record) => {
+      const stage = stages.find((item) => item.label === record.stageLabel);
+      if (stage) stage.records.push(record);
+      else stages.push({ label: record.stageLabel, records: [record] });
+    });
+    return stages;
+  }, [history]);
+
+  const currentGroup = groupStageGroups[groupIndex] ?? [];
+  const currentRevivalGroup = revivalGroups[revivalIndex] ?? [];
+  const currentMatch = knockoutRound?.matches[matchIndex] ?? [];
+  const currentVisibleSongs =
+    phase === "group"
+      ? currentGroup
+      : phase === "revival"
+        ? currentRevivalGroup
+        : phase === "knockout"
+          ? currentMatch
+          : phase === "champion"
+            ? champion
+              ? [champion]
+              : []
+            : entrants;
 
   useEffect(() => {
+    const activeId = playingSongId ?? preparingSongId;
     if (
-      playingSongId &&
-      !currentGroup.some((song) => song.id === playingSongId)
+      activeId &&
+      !currentVisibleSongs.some((song) => song.id === activeId)
     ) {
       stopPreview();
     }
-  }, [currentGroup, playingSongId, stopPreview]);
+  }, [
+    currentVisibleSongs,
+    playingSongId,
+    preparingSongId,
+    stopPreview,
+  ]);
 
-  const beginRound = useCallback((participants: Song[], number: number) => {
+  function saveChampion(song: Song) {
+    if (!selectedVersion) return;
+    const record: WinnerRecord = {
+      song,
+      versionTitle: selectedVersion.title,
+      decidedAt: new Date().toISOString(),
+    };
+    const nextResults = { ...results, [selectedVersion.version]: record };
+    setResults(nextResults);
+    setChampion(song);
+    setPhase("champion");
+    stopPreview();
+    try {
+      window.localStorage.setItem(RESULTS_KEY, JSON.stringify(nextResults));
+    } catch {
+      // 结果仍会保留到本次会话结束。
+    }
+  }
+
+  function beginKnockout(participants: Song[], roundNumber: number) {
     if (participants.length === 1) {
-      setChampion(participants[0]);
-      setPhase("champion");
+      saveChampion(participants[0]);
       return;
     }
-    const nextRound = buildRound(participants, number);
-    setRound(nextRound);
-    setRoundWinners([...nextRound.automaticWinners]);
+    const nextRound = buildKnockoutRound(participants, roundNumber);
+    setKnockoutRound(nextRound);
+    setKnockoutWinners([]);
+    setMatchIndex(0);
+    setPhase("knockout");
+    stopPreview();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function startBattle(version: Version) {
+    if (!catalog) return;
+    const participants = shuffle(
+      catalog.songs.filter((song) => song.version === version.version),
+    );
+    if (!participants.length) return;
+    const groups = buildInitialGroups(participants);
+    const orderedEntrants = groups.flat();
+    stopPreview();
+    setSelectedVersion(version);
+    setEntrants(orderedEntrants);
+    setGroupStageGroups(groups);
     setGroupIndex(0);
-  }, []);
+    setGroupPicks([]);
+    setGroupQualified([]);
+    setGroupEliminated([]);
+    setRevivalGroups([]);
+    setRevivalIndex(0);
+    setRevivedSongs([]);
+    setKnockoutRound(null);
+    setKnockoutWinners([]);
+    setHistory([]);
+    setChampion(null);
+    setPhase("roster");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-  const startBattle = useCallback(
-    (version: Version) => {
-      if (!catalog) return;
-      const participants = catalog.songs.filter(
-        (song) => song.version === version.version,
-      );
-      if (!participants.length) return;
-      stopPreview();
-      setSelectedVersion(version);
-      setChampion(null);
-      setPhase("battle");
-      beginRound(participants, 1);
+  function startGroupStage() {
+    setGroupIndex(0);
+    setGroupPicks([]);
+    setPhase("group");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function toggleGroupChoice(song: Song) {
+    stopPreview();
+    const required = Math.min(GROUP_PICKS, currentGroup.length);
+    setGroupPicks((current) => {
+      if (current.includes(song.id)) {
+        return current.filter((id) => id !== song.id);
+      }
+      if (current.length >= required) return current;
+      return [...current, song.id];
+    });
+  }
+
+  function confirmGroup() {
+    const required = Math.min(GROUP_PICKS, currentGroup.length);
+    if (groupPicks.length !== required) return;
+    const winners = currentGroup.filter((song) => groupPicks.includes(song.id));
+    const eliminated = currentGroup.filter(
+      (song) => !groupPicks.includes(song.id),
+    );
+    const nextQualified = [...groupQualified, ...winners];
+    const nextEliminated = [...groupEliminated, ...eliminated];
+
+    setHistory((current) => [
+      ...current,
+      {
+        id: `group-${groupIndex}`,
+        stageLabel: "第一轮小组赛",
+        detail: `第 ${groupIndex + 1} 组`,
+        participants: currentGroup,
+        winners,
+      },
+    ]);
+    setGroupQualified(nextQualified);
+    setGroupEliminated(nextEliminated);
+    setGroupPicks([]);
+    stopPreview();
+
+    if (groupIndex < groupStageGroups.length - 1) {
+      setGroupIndex((current) => current + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
-    },
-    [beginRound, catalog, stopPreview],
-  );
+      return;
+    }
 
-  const chooseSong = useCallback(
-    (song: Song) => {
-      if (!round || !selectedVersion) return;
-      stopPreview();
-      const winners = [...roundWinners, song];
-      const isLastGroup = groupIndex === round.groups.length - 1;
+    const revivalCount = Math.min(
+      nextEliminated.length,
+      Math.ceil(nextQualified.length / 3),
+    );
+    if (!revivalCount) {
+      beginKnockout(nextQualified, 1);
+      return;
+    }
+    setRevivalGroups(buildRevivalGroups(nextEliminated, revivalCount));
+    setRevivalIndex(0);
+    setRevivedSongs([]);
+    setPhase("revival");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-      if (!isLastGroup) {
-        setRoundWinners(winners);
-        setGroupIndex((current) => current + 1);
-        return;
-      }
+  function chooseRevival(song: Song) {
+    const nextRevived = [...revivedSongs, song];
+    setHistory((current) => [
+      ...current,
+      {
+        id: `revival-${revivalIndex}`,
+        stageLabel: "淘汰复活",
+        detail: `复活组 ${revivalIndex + 1}`,
+        participants: currentRevivalGroup,
+        winners: [song],
+      },
+    ]);
+    setRevivedSongs(nextRevived);
+    stopPreview();
 
-      if (winners.length === 1) {
-        const record: WinnerRecord = {
-          song: winners[0],
-          versionTitle: selectedVersion.title,
-          decidedAt: new Date().toISOString(),
-        };
-        const nextResults = {
-          ...results,
-          [selectedVersion.version]: record,
-        };
-        setResults(nextResults);
-        setChampion(winners[0]);
-        setPhase("champion");
-        try {
-          window.localStorage.setItem(RESULTS_KEY, JSON.stringify(nextResults));
-        } catch {
-          // 结果仍会保留至本次会话结束。
-        }
-      } else {
-        beginRound(winners, round.number + 1);
-      }
-    },
-    [
-      beginRound,
-      groupIndex,
-      results,
-      round,
-      roundWinners,
-      selectedVersion,
-      stopPreview,
-    ],
-  );
+    if (revivalIndex < revivalGroups.length - 1) {
+      setRevivalIndex((current) => current + 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    beginKnockout([...groupQualified, ...nextRevived], 1);
+  }
+
+  function chooseKnockout(song: Song) {
+    if (!knockoutRound) return;
+    const nextWinners = [...knockoutWinners, song];
+    const matchRecord: HistoryRecord = {
+      id: `knockout-${knockoutRound.number}-${matchIndex}`,
+      stageLabel: knockoutRound.label,
+      detail: `第 ${matchIndex + 1} 场`,
+      participants: currentMatch,
+      winners: [song],
+    };
+    stopPreview();
+
+    if (matchIndex < knockoutRound.matches.length - 1) {
+      setHistory((current) => [...current, matchRecord]);
+      setKnockoutWinners(nextWinners);
+      setMatchIndex((current) => current + 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    const byeRecords = knockoutRound.automaticWinners.map(
+      (automaticWinner, index): HistoryRecord => ({
+        id: `bye-${knockoutRound.number}-${index}`,
+        stageLabel: knockoutRound.label,
+        detail: "轮空晋级",
+        participants: [automaticWinner],
+        winners: [automaticWinner],
+      }),
+    );
+    setHistory((current) => [...current, matchRecord, ...byeRecords]);
+    beginKnockout(
+      [...nextWinners, ...knockoutRound.automaticWinners],
+      knockoutRound.number + 1,
+    );
+  }
 
   useEffect(() => {
-    if (phase !== "battle") return;
+    if (!["group", "revival", "knockout"].includes(phase)) return;
     const onKeyDown = (event: KeyboardEvent) => {
       const index = Number(event.key) - 1;
-      if (index >= 0 && index < currentGroup.length) {
-        chooseSong(currentGroup[index]);
+      if (phase === "group" && index >= 0 && index < currentGroup.length) {
+        toggleGroupChoice(currentGroup[index]);
+      } else if (
+        phase === "revival" &&
+        index >= 0 &&
+        index < currentRevivalGroup.length
+      ) {
+        chooseRevival(currentRevivalGroup[index]);
+      } else if (
+        phase === "knockout" &&
+        index >= 0 &&
+        index < currentMatch.length
+      ) {
+        chooseKnockout(currentMatch[index]);
+      } else if (phase === "group" && event.key === "Enter") {
+        confirmGroup();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [chooseSong, currentGroup, phase]);
+  });
 
-  const goHome = () => {
+  function goHome() {
     stopPreview();
     setPhase("home");
-    setRound(null);
     setSelectedVersion(null);
     setChampion(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  }
 
-  const reportImageError = (id: string) => {
+  function reportImageError(id: string) {
     setImageErrors((current) => ({ ...current, [id]: true }));
-  };
+  }
+
+  function renderSongCards(
+    songs: Song[],
+    onChoose: (song: Song) => void,
+    selectedIds: string[] = [],
+    multiSelect = false,
+  ) {
+    return (
+      <div className={`song-grid song-count-${songs.length}`}>
+        {songs.map((song, index) => {
+          const isPreparing = preparingSongId === song.id;
+          const isPlaying = playingSongId === song.id;
+          const isSelected = selectedIds.includes(song.id);
+          const previewUnavailable = !song.preview || previewErrors[song.id];
+          return (
+            <article
+              className={`song-card tone-${songTone(song, index)} ${
+                isPlaying || isPreparing ? "is-playing" : ""
+              } ${isSelected ? "is-selected" : ""}`}
+              key={song.id}
+            >
+              <span className="shortcut">{index + 1}</span>
+              <span className="cover-wrap">
+                {!imageErrors[song.id] ? (
+                  <img
+                    src={song.cover}
+                    alt=""
+                    loading="eager"
+                    onError={() => reportImageError(song.id)}
+                  />
+                ) : (
+                  <span className="cover-fallback" aria-hidden="true">
+                    mai
+                  </span>
+                )}
+                <span className="card-glow" />
+                {(isPlaying || isPreparing) && (
+                  <span className="playing-badge" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                )}
+              </span>
+              <span className="song-copy">
+                <span className="song-title">{song.title}</span>
+                <span className="song-artist">{song.artist}</span>
+                <span className="song-tags">
+                  <span>{song.genre}</span>
+                  <span>{song.bpm} BPM</span>
+                </span>
+              </span>
+              <span className="song-actions">
+                <button
+                  className="preview-button"
+                  type="button"
+                  disabled={previewUnavailable}
+                  onClick={() => togglePreview(song)}
+                >
+                  <span aria-hidden="true">
+                    {isPlaying || isPreparing ? "■" : "▶"}
+                  </span>
+                  {previewUnavailable
+                    ? "暂无试听"
+                    : isPreparing
+                      ? "0.5s 后播放"
+                      : isPlaying
+                        ? `停止 · ${previewSeconds}s`
+                        : "试听 30s"}
+                </button>
+                <button
+                  className="pick-label"
+                  type="button"
+                  onClick={() => onChoose(song)}
+                >
+                  {multiSelect
+                    ? isSelected
+                      ? "已选择"
+                      : "选择"
+                    : "选它晋级"}
+                  <span>{isSelected ? "✓" : "→"}</span>
+                </button>
+              </span>
+            </article>
+          );
+        })}
+      </div>
+    );
+  }
 
   if (loadError) {
     return (
@@ -351,147 +677,307 @@ export default function Home() {
           <span />
           <span />
         </div>
-        <p>正在装载舞萌中国版曲库…</p>
+        <p>正在装载舞萌中国版曲库</p>
       </main>
     );
   }
 
-  if (phase === "battle" && selectedVersion && round) {
-    const roundProgress =
-      totalGroups === 0 ? 100 : ((groupIndex + 1) / totalGroups) * 100;
+  if (phase === "roster" && selectedVersion) {
+    const qualifiedCount = groupStageGroups.reduce(
+      (total, group) => total + Math.min(GROUP_PICKS, group.length),
+      0,
+    );
+    const revivalCount = Math.ceil(qualifiedCount / 3);
+    return (
+      <main className="tournament-page roster-page">
+        <header className="battle-header">
+          <button className="icon-button" onClick={goHome} aria-label="返回">
+            ←
+          </button>
+          <div className="battle-heading">
+            <strong>{selectedVersion.title}</strong>
+            <span>TOURNAMENT ROSTER</span>
+          </div>
+          <button
+            className="text-button"
+            onClick={() => startBattle(selectedVersion)}
+          >
+            重新分组
+          </button>
+        </header>
+        <section className="roster-shell">
+          <div className="round-meta">
+            <span className="eyebrow">ALL SONGS · GROUP DRAW</span>
+            <h1>
+              {entrants.length} 首参赛，分为{" "}
+              <span>{groupStageGroups.length} 组</span>
+            </h1>
+            <p>
+              每组最多 {GROUP_SIZE} 首，小组赛必须选出 2 首；随后从落选歌曲中复活{" "}
+              {revivalCount} 首。
+            </p>
+          </div>
+          <div className="format-strip">
+            <span>
+              <strong>{entrants.length}</strong>参赛歌曲
+            </span>
+            <i>→</i>
+            <span>
+              <strong>{qualifiedCount}</strong>小组晋级
+            </span>
+            <i>+</i>
+            <span>
+              <strong>{revivalCount}</strong>淘汰复活
+            </span>
+            <i>→</i>
+            <span>
+              <strong>1</strong>最终冠军
+            </span>
+          </div>
+          <div className="roster-grid">
+            {groupStageGroups.flatMap((group, rosterGroupIndex) =>
+              group.map((song, songIndex) => (
+                <article className="roster-song" key={song.id}>
+                  <span>
+                    {String(
+                      groupStageGroups
+                        .slice(0, rosterGroupIndex)
+                        .reduce((total, item) => total + item.length, 0) +
+                        songIndex +
+                        1,
+                    ).padStart(2, "0")}
+                  </span>
+                  {!imageErrors[song.id] ? (
+                    <img
+                      src={song.cover}
+                      alt=""
+                      onError={() => reportImageError(song.id)}
+                    />
+                  ) : (
+                    <i>mai</i>
+                  )}
+                  <div>
+                    <strong>{song.title}</strong>
+                    <small>第 {rosterGroupIndex + 1} 组</small>
+                  </div>
+                </article>
+              )),
+            )}
+          </div>
+          <div className="roster-start">
+            <button className="primary-button" onClick={startGroupStage}>
+              开始第一组小组赛 <span>→</span>
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (
+    ["group", "revival", "knockout"].includes(phase) &&
+    selectedVersion
+  ) {
+    const isGroup = phase === "group";
+    const isRevival = phase === "revival";
+    const songs = isGroup
+      ? currentGroup
+      : isRevival
+        ? currentRevivalGroup
+        : currentMatch;
+    const title = isGroup
+      ? "第一轮小组赛"
+      : isRevival
+        ? "淘汰复活"
+        : knockoutRound?.label ?? "淘汰赛";
+    const currentNumber = isGroup
+      ? groupIndex + 1
+      : isRevival
+        ? revivalIndex + 1
+        : matchIndex + 1;
+    const totalNumber = isGroup
+      ? groupStageGroups.length
+      : isRevival
+        ? revivalGroups.length
+        : knockoutRound?.matches.length ?? 1;
+    const progress = (currentNumber / totalNumber) * 100;
+    const requiredPicks = Math.min(GROUP_PICKS, currentGroup.length);
+
     return (
       <main className="battle-page">
         <header className="battle-header">
-          <button
-            className="icon-button"
-            onClick={goHome}
-            aria-label="返回版本选择"
-          >
+          <button className="icon-button" onClick={goHome} aria-label="返回">
             ←
           </button>
           <div className="battle-heading">
             <strong>{selectedVersion.title}</strong>
             <span>
-              ROUND {String(round.number).padStart(2, "0")} ·{" "}
-              {round.participantCount} 首在场
+              {title} · {isGroup || isRevival ? "GROUP" : "MATCH"}{" "}
+              {currentNumber}/{totalNumber}
             </span>
           </div>
           <button
             className="text-button"
             onClick={() => startBattle(selectedVersion)}
           >
-            重新洗牌
+            重新开始
           </button>
         </header>
 
         <section className="battle-stage">
           <div className="round-meta">
-            <span className="eyebrow">LISTEN · COMPARE · PICK</span>
+            <span className="eyebrow">
+              {isGroup
+                ? "PICK TWO"
+                : isRevival
+                  ? "ONE MORE CHANCE"
+                  : "HEAD TO HEAD"}
+            </span>
             <h1>
-              先听一段，再选<span>晋级</span>。
+              {title}
+              <br />
+              <span>
+                {isGroup
+                  ? `选择两首 · ${groupPicks.length}/${requiredPicks}`
+                  : isRevival
+                    ? `复活一首 · 名额 ${revivalGroups.length}`
+                    : "一对一 · 只选一首"}
+              </span>
             </h1>
-            <p>每首最多试听 30 秒；选择后，胜者进入下一轮。</p>
+            <p>
+              点击试听后 0.5 秒开始播放，最多试听 30 秒；切换歌曲时会自动停止。
+            </p>
           </div>
-
           <div className="progress-row">
             <span>
-              本轮第 {groupIndex + 1} / {totalGroups} 组
+              {title} · {currentNumber} / {totalNumber}
             </span>
-            <span>{Math.round(roundProgress)}%</span>
+            <span>{Math.round(progress)}%</span>
           </div>
           <div className="progress-track">
-            <span style={{ width: `${roundProgress}%` }} />
+            <span style={{ width: `${progress}%` }} />
           </div>
 
-          <div className={`song-grid song-count-${currentGroup.length}`}>
-            {currentGroup.map((song, index) => {
-              const isPlaying = playingSongId === song.id;
-              const previewUnavailable =
-                !song.preview || previewErrors[song.id];
-              return (
-                <article
-                  className={`song-card tone-${songTone(song, index)} ${
-                    isPlaying ? "is-playing" : ""
-                  }`}
-                  key={song.id}
-                >
-                  <span className="shortcut">{index + 1}</span>
-                  <span className="cover-wrap">
-                    {!imageErrors[song.id] ? (
-                      <img
-                        src={song.cover}
-                        alt=""
-                        loading="eager"
-                        onError={() => reportImageError(song.id)}
-                      />
-                    ) : (
-                      <span className="cover-fallback" aria-hidden="true">
-                        mai
-                      </span>
-                    )}
-                    <span className="card-glow" />
-                    {isPlaying && (
-                      <span className="playing-badge" aria-hidden="true">
-                        <i />
-                        <i />
-                        <i />
-                        <i />
-                      </span>
-                    )}
-                  </span>
-                  <span className="song-copy">
-                    <span className="song-title">{song.title}</span>
-                    <span className="song-artist">{song.artist}</span>
-                    <span className="song-tags">
-                      <span>{song.genre}</span>
-                      <span>{song.bpm} BPM</span>
-                    </span>
-                  </span>
-                  <span className="song-actions">
-                    <button
-                      className="preview-button"
-                      type="button"
-                      disabled={previewUnavailable}
-                      onClick={() => togglePreview(song)}
-                      aria-label={
-                        previewUnavailable
-                          ? `${song.title} 暂无试听`
-                          : isPlaying
-                            ? `停止试听 ${song.title}`
-                            : `试听 ${song.title} 30 秒`
-                      }
-                    >
-                      <span aria-hidden="true">{isPlaying ? "■" : "▶"}</span>
-                      {previewUnavailable
-                        ? "暂无试听"
-                        : isPlaying
-                          ? `停止 · ${previewSeconds}s`
-                          : "试听 30s"}
-                    </button>
-                    <button
-                      className="pick-label"
-                      type="button"
-                      onClick={() => chooseSong(song)}
-                      aria-label={`选择 ${song.title}，${song.artist}`}
-                    >
-                      选它晋级 <span>→</span>
-                    </button>
-                  </span>
-                </article>
-              );
-            })}
-          </div>
+          {renderSongCards(
+            songs,
+            isGroup
+              ? toggleGroupChoice
+              : isRevival
+                ? chooseRevival
+                : chooseKnockout,
+            isGroup ? groupPicks : [],
+            isGroup,
+          )}
 
+          {isGroup && (
+            <div className="group-confirm">
+              <button
+                className="primary-button"
+                disabled={groupPicks.length !== requiredPicks}
+                onClick={confirmGroup}
+              >
+                确认这两首晋级 <span>→</span>
+              </button>
+            </div>
+          )}
           <p className="keyboard-hint">
-            键盘玩家可按 <kbd>1</kbd> – <kbd>{currentGroup.length}</kbd>{" "}
-            快速选择；试听源来自网易云电台
+            可按数字键 <kbd>1</kbd>–<kbd>{songs.length}</kbd>{" "}
+            选择歌曲{isGroup ? "，选满后按 Enter 确认" : ""}
           </p>
         </section>
       </main>
     );
   }
 
-  if (phase === "champion" && selectedVersion && champion) {
+  if (
+    (phase === "champion" || phase === "overview") &&
+    selectedVersion &&
+    champion
+  ) {
+    if (phase === "overview") {
+      return (
+        <main className="overview-page">
+          <header className="overview-header">
+            <button
+              className="icon-button"
+              onClick={() => setPhase("champion")}
+              aria-label="返回冠军页"
+            >
+              ←
+            </button>
+            <div>
+              <span className="eyebrow">FULL TOURNAMENT</span>
+              <strong>{selectedVersion.title} · 比赛全过程</strong>
+            </div>
+            <button className="text-button" onClick={goHome}>
+              全部版本
+            </button>
+          </header>
+          <section className="overview-champion">
+            <span className="eyebrow">CHAMPION</span>
+            <div className="overview-champion-main">
+              <img src={champion.cover} alt="" />
+              <div>
+                <small>🏆 冠军</small>
+                <h1>{champion.title}</h1>
+                <p>{champion.artist}</p>
+              </div>
+            </div>
+          </section>
+          <div className="bracket-scroll">
+            <div className="bracket-board">
+              <section className="bracket-stage">
+                <header>
+                  <span>00</span>
+                  <h2>参赛曲库</h2>
+                  <small>{entrants.length} 首</small>
+                </header>
+                <div className="bracket-roster">
+                  {entrants.map((song) => (
+                    <div className="bracket-song" key={song.id}>
+                      <img src={song.cover} alt="" />
+                      <span>{song.title}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              {overviewStages.map((stage, stageIndex) => (
+                <section className="bracket-stage" key={stage.label}>
+                  <header>
+                    <span>{String(stageIndex + 1).padStart(2, "0")}</span>
+                    <h2>{stage.label}</h2>
+                    <small>{stage.records.length} 场</small>
+                  </header>
+                  <div className="bracket-matches">
+                    {stage.records.map((record) => (
+                      <article className="bracket-match" key={record.id}>
+                        <small>{record.detail}</small>
+                        {record.participants.map((song) => {
+                          const isWinner = record.winners.some(
+                            (winner) => winner.id === song.id,
+                          );
+                          return (
+                            <div
+                              className={isWinner ? "advanced" : "eliminated"}
+                              key={song.id}
+                            >
+                              <img src={song.cover} alt="" />
+                              <span>{song.title}</span>
+                              <b>{isWinner ? "✓" : "×"}</b>
+                            </div>
+                          );
+                        })}
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+        </main>
+      );
+    }
+
     return (
       <main className="champion-page">
         <div className="confetti" aria-hidden="true">
@@ -503,7 +989,7 @@ export default function Home() {
           ← 全部版本
         </button>
         <section className="champion-card">
-          <span className="champion-kicker">VERSION CHAMPION</span>
+          <span className="champion-kicker">TOURNAMENT CHAMPION</span>
           <div className="champion-cover">
             {!imageErrors[champion.id] ? (
               <img
@@ -524,19 +1010,25 @@ export default function Home() {
             <i />
             <span>{champion.bpm} BPM</span>
             <i />
-            <span>{songCounts.get(selectedVersion.version)} 首中胜出</span>
+            <span>{entrants.length} 首中胜出</span>
           </div>
           <div className="champion-actions">
             <button
               className="primary-button"
               onClick={() => startBattle(selectedVersion)}
             >
-              再战一轮
+              再开一轮
             </button>
-            <button className="secondary-button" onClick={goHome}>
-              挑战其他版本
+            <button
+              className="secondary-button"
+              onClick={() => setPhase("overview")}
+            >
+              观看比赛概览
             </button>
           </div>
+          <button className="champion-home-link" onClick={goHome}>
+            挑战其他版本 →
+          </button>
           <p className="saved-note">冠军结果已保存在这台设备中</p>
         </section>
       </main>
@@ -580,19 +1072,19 @@ export default function Home() {
             MAIMAI CHINA · {catalog.updatedAt.replaceAll("-", ".")}
           </span>
           <h1>
-            每个时代，
+            从小组赛，
             <br />
-            只有<span>一首</span>能登顶。
+            一路战到<span>总决赛</span>。
           </h1>
           <p>
-            DX 段采用中国版年度序列：舞萌 DX、2021…2026。
+            先浏览完整参赛曲库，小组赛每组选出两首，再通过淘汰复活与
             <br />
-            每轮可以先试听 30 秒，再决定让谁晋级。
+            一对一淘汰赛，决出每个舞萌中国版的唯一冠军。
           </p>
           <div className="hero-stats">
             <span>
               <strong>{catalog.songs.length}</strong>
-              中国版曲目
+              非宴谱曲目
             </span>
             <span>
               <strong>{catalog.versions.length}</strong>
@@ -612,14 +1104,14 @@ export default function Home() {
           <span className="quick-label">QUICK START · 最新中国版</span>
           <h2>{featuredVersion.title}</h2>
           <p>
-            {featuredSongs} 首参赛 · 预计 {estimatedChoices(featuredSongs)}{" "}
-            次选择
+            {featuredSongs} 首参赛 · {Math.ceil(featuredSongs / GROUP_SIZE)}{" "}
+            个小组
           </p>
           <button
             className="primary-button"
             onClick={() => startBattle(featuredVersion)}
           >
-            立即开启 <span>→</span>
+            开始决战 <span>→</span>
           </button>
         </aside>
       </section>
@@ -636,127 +1128,109 @@ export default function Home() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索版本"
-              aria-label="搜索版本"
             />
           </label>
         </div>
-
-        <div className="filter-tabs" role="group" aria-label="版本筛选">
+        <div className="filter-tabs">
           {[
             ["all", "全部版本"],
-            ["dx", "舞萌 DX 中国版"],
-            ["classic", "经典旧框"],
+            ["classic", "旧框版本"],
+            ["dx", "舞萌DX 中国版"],
           ].map(([value, label]) => (
             <button
-              key={value}
               className={filter === value ? "active" : ""}
+              key={value}
               onClick={() => setFilter(value as typeof filter)}
-              aria-pressed={filter === value}
             >
               {label}
             </button>
           ))}
         </div>
-
         <div className="version-grid">
           {visibleVersions.map((version, index) => {
             const count = songCounts.get(version.version) ?? 0;
-            const result = results[version.version];
+            const winner = results[version.version]?.song;
             return (
               <article
                 className={`version-card accent-${palette[index % palette.length]} ${
-                  result ? "completed" : ""
-                }`}
+                  winner ? "completed" : ""
+                } ${count ? "" : "disabled"}`}
                 key={version.version}
               >
                 <div className="version-card-top">
-                  <span>
-                    {version.era === "dx" ? "CHINA DX" : "CLASSIC"}
-                  </span>
+                  <span>{winner ? "CHAMPION DECIDED" : "READY"}</span>
                   <span>{String(index + 1).padStart(2, "0")}</span>
                 </div>
                 <div
                   className={`version-art version-art-${version.era}`}
-                  aria-hidden="true"
                 >
-                  <img src={version.icon} alt="" loading="lazy" />
+                  <img src={version.icon} alt="" />
                 </div>
                 <h3>{version.title}</h3>
                 <p>
-                  {count} 首参赛 · 约 {estimatedChoices(count)} 次选择
+                  {count} 首 · {Math.ceil(count / GROUP_SIZE)} 组
                 </p>
-                {result ? (
-                  <div className="version-winner">
-                    <span>你的冠军</span>
-                    <strong>{result.song.title}</strong>
-                  </div>
-                ) : (
-                  <div className="version-winner empty">
-                    <span>等待开启</span>
-                    <strong>尚未决出冠军</strong>
-                  </div>
-                )}
-                <button onClick={() => startBattle(version)}>
-                  {result ? "重新决战" : "开始决战"} <span>→</span>
+                <div className={`version-winner ${winner ? "" : "empty"}`}>
+                  <span>{winner ? "CURRENT CHAMPION" : "NO CHAMPION YET"}</span>
+                  <strong>{winner?.title ?? "等待你来决出冠军"}</strong>
+                </div>
+                <button
+                  disabled={!count}
+                  onClick={() => startBattle(version)}
+                >
+                  {winner ? "再开一轮" : "开始决战"} <span>→</span>
                 </button>
               </article>
             );
           })}
         </div>
-
         {!visibleVersions.length && (
-          <div className="empty-search">没有找到匹配的版本。</div>
+          <p className="empty-search">没有找到匹配的版本。</p>
         )}
       </section>
 
       <section className="how-section">
         <div>
-          <span className="eyebrow">HOW IT WORKS</span>
-          <h2>按中国版曲库，选出真正的版本冠军</h2>
+          <span className="eyebrow">TOURNAMENT FORMAT</span>
+          <h2>一场完整的版本本命曲决战</h2>
         </div>
         <ol>
           <li>
             <span>01</span>
-            <strong>按国服年度版本分组</strong>
-            <p>曲目使用 LXNS 的中国版主版本归属，DX 段截至 2026。</p>
+            <strong>小组赛双选</strong>
+            <p>展示全部歌曲，每组最多4首并选出2首。</p>
           </li>
           <li>
             <span>02</span>
-            <strong>试听 30 秒再决定</strong>
-            <p>投票卡片提供网易云电台试听，同一时间只播放一首。</p>
+            <strong>淘汰复活</strong>
+            <p>复活数为小组晋级歌曲数的三分之一，向上取整。</p>
           </li>
           <li>
             <span>03</span>
-            <strong>每组只留一首</strong>
-            <p>胜者继续交锋，最终留下该版本最喜欢的一首。</p>
+            <strong>一对一淘汰</strong>
+            <p>逐轮晋级，依次进入四分之一决赛、半决赛与总决赛。</p>
+          </li>
+          <li>
+            <span>04</span>
+            <strong>冠军与概览</strong>
+            <p>保存冠军，并可回看从小组赛到总决赛的全部选择。</p>
           </li>
         </ol>
       </section>
 
       <footer>
-        <div className="brand footer-brand">
+        <a className="brand" href="#top">
           <span className="brand-disc">
             <i />
           </span>
           <span>
             <strong>mai:CUP</strong>
-            <small>NO RATING. JUST FAVORITES.</small>
+            <small>CHINA VERSION</small>
           </span>
-        </div>
+        </a>
         <p>
-          中国版曲库、版本与曲绘来自{" "}
-          <a
-            href="https://maimai.lxns.net/docs/api/maimai"
-            target="_blank"
-            rel="noreferrer"
-          >
-            LXNS
-          </a>
-          ；30 秒试听来自用户指定的{" "}
-          <a href={catalog.previewSource} target="_blank" rel="noreferrer">
-            网易云音乐电台
-          </a>
-          。旧框头像参考 Maimai Wiki，中国版年度 Logo 来自公开社区素材。非世嘉官方产品。
+          中国版曲库、版本与封面来自 LXNS；试听来自指定网易云电台。
+          宴会场曲目已排除，试听仅播放30秒。
         </p>
       </footer>
     </main>

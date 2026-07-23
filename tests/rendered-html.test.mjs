@@ -29,7 +29,7 @@ test("server-renders the mai:CUP application shell", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>mai:CUP｜舞萌 DX 中国版年度本命曲决战<\/title>/);
+  assert.match(html, /<title>mai:CUP｜舞萌中国版歌曲淘汰赛<\/title>/);
   assert.match(html, /正在装载舞萌中国版曲库/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
 });
@@ -43,13 +43,14 @@ test("catalog uses Chinese annual versions and mapped previews", async () => {
   );
 
   assert.equal(catalog.versions.length, 20);
-  assert.equal(catalog.songs.length, 1305);
+  assert.equal(catalog.songs.length, 1251);
   assert.equal(catalog.versions.at(-1).title, "舞萌DX 2026");
   assert.equal(catalog.versions.at(-1).version, "25500");
-  assert.ok(catalog.songs.filter((song) => song.preview).length >= 1200);
+  assert.ok(catalog.songs.filter((song) => song.preview).length >= 1180);
+  assert.ok(catalog.songs.every((song) => song.genre !== "宴会場"));
   assert.equal(
     catalog.songs.filter((song) => song.version === "25500").length,
-    37,
+    30,
   );
   assert.ok(
     catalog.songs.every((song) =>
@@ -58,14 +59,22 @@ test("catalog uses Chinese annual versions and mapped previews", async () => {
   );
 });
 
-test("battle UI enforces a single 30-second preview player", async () => {
+test("battle UI implements the full tournament and delayed preview", async () => {
   const page = await readFile(
     new URL("../app/page.tsx", import.meta.url),
     "utf8",
   );
 
   assert.match(page, /audioRef = useRef<HTMLAudioElement/);
-  assert.match(page, /audio\.currentTime >= 30/);
+  assert.match(page, /PREVIEW_DELAY_MS = 500/);
+  assert.match(page, /PREVIEW_LIMIT_SECONDS = 30/);
+  assert.match(page, /Math\.ceil\(nextQualified\.length \/ 3\)/);
+  assert.match(page, /第一轮小组赛/);
+  assert.match(page, /淘汰复活/);
+  assert.match(page, /四分之一决赛/);
+  assert.match(page, /半决赛/);
+  assert.match(page, /总决赛/);
+  assert.match(page, /观看比赛概览/);
   assert.match(page, /stopPreview\(\)/);
   assert.match(page, /试听 30s/);
   assert.match(page, /暂无试听/);
