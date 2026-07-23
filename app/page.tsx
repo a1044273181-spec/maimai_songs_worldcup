@@ -186,9 +186,13 @@ export default function Home() {
     | "fallback"
     | "error"
   >("idle");
+  const [posterPreviewUrl, setPosterPreviewUrl] = useState<string | null>(
+    null,
+  );
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const posterRef = useRef<HTMLElement | null>(null);
   const posterBlobRef = useRef<Blob | null>(null);
+  const posterPreviewUrlRef = useRef<string | null>(null);
   const exportBusyRef = useRef(false);
 
   useEffect(() => {
@@ -585,6 +589,7 @@ export default function Home() {
     const exportHost = document.createElement("div");
     exportHost.className = "poster-export-host";
     const exportPoster = poster.cloneNode(true) as HTMLElement;
+    exportPoster.classList.remove("poster-source-layout");
     exportPoster.classList.add("poster-export-layout");
     exportHost.appendChild(exportPoster);
     document.body.appendChild(exportHost);
@@ -677,6 +682,11 @@ export default function Home() {
   useEffect(() => {
     if (phase !== "overview") {
       posterBlobRef.current = null;
+      if (posterPreviewUrlRef.current) {
+        URL.revokeObjectURL(posterPreviewUrlRef.current);
+        posterPreviewUrlRef.current = null;
+      }
+      setPosterPreviewUrl(null);
       setExportState("idle");
       return;
     }
@@ -689,6 +699,12 @@ export default function Home() {
         const blob = await createPosterBlob();
         if (cancelled) return;
         posterBlobRef.current = blob;
+        if (posterPreviewUrlRef.current) {
+          URL.revokeObjectURL(posterPreviewUrlRef.current);
+        }
+        const previewUrl = URL.createObjectURL(blob);
+        posterPreviewUrlRef.current = previewUrl;
+        setPosterPreviewUrl(previewUrl);
         setExportState("ready");
       } catch {
         if (!cancelled) setExportState("error");
@@ -707,6 +723,15 @@ export default function Home() {
     champion?.id,
     selectedVersion?.version,
   ]);
+
+  useEffect(
+    () => () => {
+      if (posterPreviewUrlRef.current) {
+        URL.revokeObjectURL(posterPreviewUrlRef.current);
+      }
+    },
+    [],
+  );
 
   function renderSongCards(
     songs: Song[],
@@ -1050,7 +1075,7 @@ export default function Home() {
   ) {
     if (phase === "overview") {
       return (
-        <main className="overview-page">
+        <main className="overview-page overview-fit-page">
           <header className="overview-header">
             <button
               className="icon-button"
@@ -1109,7 +1134,37 @@ export default function Home() {
                       : "图片生成失败，请确认歌曲封面加载完成后重试。"}
             </p>
           )}
-          <article className="tournament-poster" ref={posterRef}>
+          <section className="overview-screen" aria-label="比赛概览预览">
+            {posterPreviewUrl ? (
+              <img
+                className="overview-preview-image"
+                src={posterPreviewUrl}
+                alt={`${selectedVersion.title} 比赛一图流完整概览`}
+              />
+            ) : (
+              <div className="overview-preview-loading" aria-live="polite">
+                <span className="brand-disc">
+                  <i />
+                </span>
+                <strong>
+                  {exportState === "error" ? "概览生成失败" : "正在排版完整概览…"}
+                </strong>
+                <small>
+                  {exportState === "error"
+                    ? "请返回冠军页后重新进入概览"
+                    : "歌曲较多时需要稍等片刻"}
+                </small>
+              </div>
+            )}
+            <p className="overview-preview-hint">
+              完整赛程已缩放到一屏 · 保存或分享可查看 1080px 清晰图
+            </p>
+          </section>
+          <article
+            className="tournament-poster poster-source-layout"
+            ref={posterRef}
+            aria-hidden="true"
+          >
             <section className="poster-hero">
               <div className="poster-brand">
                 <span className="brand-disc">
