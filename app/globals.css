@@ -908,21 +908,25 @@ footer a:hover {
   border-radius: 20px;
   background: rgba(17, 21, 29, 0.88);
   overflow: hidden;
-  cursor: pointer;
   transition:
     transform 180ms ease,
     border-color 180ms ease,
     box-shadow 180ms ease;
 }
 
-.song-card:hover,
-.song-card:focus-visible {
+.song-card:hover {
   transform: translateY(-7px);
   border-color: color-mix(in srgb, var(--accent) 65%, transparent);
-  outline: none;
   box-shadow:
     0 24px 54px rgba(0, 0, 0, 0.4),
     0 0 24px color-mix(in srgb, var(--accent) 11%, transparent);
+}
+
+.song-card.is-playing {
+  border-color: var(--accent);
+  box-shadow:
+    0 24px 54px rgba(0, 0, 0, 0.4),
+    0 0 28px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .shortcut {
@@ -992,6 +996,53 @@ footer a:hover {
   background: linear-gradient(transparent, rgba(9, 11, 17, 0.7));
 }
 
+.playing-badge {
+  width: 44px;
+  height: 30px;
+  padding: 7px 9px;
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 999px;
+  background: rgba(9, 11, 17, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.playing-badge i {
+  width: 3px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: audio-bars 620ms ease-in-out infinite alternate;
+}
+
+.playing-badge i:nth-child(2) {
+  height: 13px;
+  animation-delay: -210ms;
+}
+
+.playing-badge i:nth-child(3) {
+  height: 9px;
+  animation-delay: -420ms;
+}
+
+.playing-badge i:nth-child(4) {
+  height: 16px;
+  animation-delay: -120ms;
+}
+
+@keyframes audio-bars {
+  to {
+    height: 18px;
+  }
+}
+
 .song-copy {
   min-height: 112px;
   padding: 17px 8px 8px;
@@ -1037,23 +1088,54 @@ footer a:hover {
   font-size: 7px;
 }
 
+.song-actions {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 6px;
+}
+
+.preview-button,
 .pick-label {
   height: 34px;
   padding: 0 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border: 0;
   border-radius: 9px;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  cursor: pointer;
   font-size: 9px;
   font-weight: 900;
+}
+
+.preview-button {
+  color: #aab4c2;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.preview-button:hover:not(:disabled),
+.song-card.is-playing .preview-button {
+  color: white;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.preview-button:disabled {
+  color: #596270;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.pick-label {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
   letter-spacing: 0.08em;
 }
 
-.song-card:hover .pick-label {
+.pick-label:hover,
+.pick-label:focus-visible {
   color: var(--ink);
   background: var(--accent);
+  outline: none;
 }
 
 .keyboard-hint {
@@ -1455,6 +1537,16 @@ kbd {
 
   .pick-label {
     padding: 0 7px;
+  }
+
+  .song-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-button,
+  .pick-label {
+    height: 32px;
+    padding: 0 8px;
   }
 
   .champion-card {

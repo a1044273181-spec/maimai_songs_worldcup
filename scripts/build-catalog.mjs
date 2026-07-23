@@ -1,81 +1,114 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 const outputPath = new URL("../public/maimai-cn.json", import.meta.url);
-const sourceUrl =
-  "https://dp4p6x0xfi5o9.cloudfront.net/maimai/data.json";
-const fallbackPath = new URL(
-  "../work/arcade-maimai-data.json",
-  import.meta.url,
-);
+const lxnsUrl =
+  "https://maimai.lxns.net/api/v0/maimai/song/list?version=25500&notes=false";
+const radioApi =
+  "https://music.163.com/api/dj/program/byradio?radioId=969217156&limit=500";
+const radioPageUrl =
+  "https://music.163.com/djradio?id=969217156&uct2=U2FsdGVkX1/bzEBHrll0bjx5XDziVImBjPnNHm0pQSQ=";
+const offsets = [0, 500, 1000, 1500];
 
-let raw;
-try {
-  const response = await fetch(sourceUrl);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  raw = await response.json();
-} catch {
-  raw = JSON.parse(await readFile(fallbackPath, "utf8"));
+async function loadJson(url, fallback) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Referer: "https://music.163.com/",
+        "User-Agent": "Mozilla/5.0 mai:CUP catalog builder",
+      },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch {
+    return JSON.parse(
+      await readFile(new URL(`../work/${fallback}`, import.meta.url), "utf8"),
+    );
+  }
 }
 
+const [lxns, ...radioPages] = await Promise.all([
+  loadJson(lxnsUrl, "lxns-song-list.json"),
+  ...offsets.map((offset) =>
+    loadJson(
+      `${radioApi}&offset=${offset}`,
+      offset === 0 ? "netease-radio.json" : `netease-radio-${offset}.json`,
+    ),
+  ),
+]);
+
 const classicIcons = {
-  maimai: "/version-icons/classic/maimai.png",
-  "maimai PLUS": "/version-icons/classic/maimai.png",
-  GreeN: "/version-icons/classic/green.png",
-  "GreeN PLUS": "/version-icons/classic/green.png",
-  ORANGE: "/version-icons/classic/orange.jpg",
-  "ORANGE PLUS": "/version-icons/classic/orange.jpg",
-  PiNK: "/version-icons/classic/pink.png",
-  "PiNK PLUS": "/version-icons/classic/pink.png",
-  MURASAKi: "/version-icons/classic/murasaki.png",
-  "MURASAKi PLUS": "/version-icons/classic/murasaki.png",
-  MiLK: "/version-icons/classic/milk.png",
-  "MiLK PLUS": "/version-icons/classic/milk.png",
-  FiNALE: "/version-icons/classic/finale.jpg",
+  10000: "/version-icons/classic/maimai.png",
+  11000: "/version-icons/classic/maimai.png",
+  12000: "/version-icons/classic/green.png",
+  13000: "/version-icons/classic/green.png",
+  14000: "/version-icons/classic/orange.jpg",
+  15000: "/version-icons/classic/orange.jpg",
+  16000: "/version-icons/classic/pink.png",
+  17000: "/version-icons/classic/pink.png",
+  18000: "/version-icons/classic/murasaki.png",
+  18500: "/version-icons/classic/murasaki.png",
+  19000: "/version-icons/classic/milk.png",
+  19500: "/version-icons/classic/milk.png",
+  19900: "/version-icons/classic/finale.jpg",
 };
 
 const dxIcons = {
-  "maimaiでらっくす": "/version-icons/dx/dx.png",
-  "maimaiでらっくす PLUS": "/version-icons/dx/dx-plus.png",
-  Splash: "/version-icons/dx/splash.png",
-  "Splash PLUS": "/version-icons/dx/splash-plus.png",
-  UNiVERSE: "/version-icons/dx/universe.png",
-  "UNiVERSE PLUS": "/version-icons/dx/universe-plus.png",
-  FESTiVAL: "/version-icons/dx/festival.png",
-  "FESTiVAL PLUS": "/version-icons/dx/festival-plus.png",
-  BUDDiES: "/version-icons/dx/buddies.png",
-  "BUDDiES PLUS": "/version-icons/dx/buddies-plus.png",
-  PRiSM: "/version-icons/dx/prism.png",
-  "PRiSM PLUS": "/version-icons/dx/prism-plus.png",
-  CiRCLE: "/version-icons/dx/circle.png",
-  "CiRCLE PLUS": "/version-icons/dx/circle-plus.png",
+  20000: "/version-icons/dx-cn/dx-2020.webp",
+  21000: "/version-icons/dx-cn/dx-2021.webp",
+  22000: "/version-icons/dx-cn/dx-2022.webp",
+  23000: "/version-icons/dx-cn/dx-2023.webp",
+  24000: "/version-icons/dx-cn/dx-2024.webp",
+  25000: "/version-icons/dx-cn/dx-2025.webp",
+  25500: "/version-icons/dx-cn/dx-2026.webp",
 };
 
-const versions = raw.versions.map((item) => ({
-  title: item.version,
-  version: item.version,
-  abbr: item.abbr,
-  releaseDate: item.releaseDate,
-  era: classicIcons[item.version] ? "classic" : "dx",
+const versions = lxns.versions.map((item) => ({
+  title: item.title,
+  version: String(item.version),
+  abbr: item.title,
+  era: item.version < 20000 ? "classic" : "dx",
   icon: classicIcons[item.version] ?? dxIcons[item.version],
 }));
 
-const songs = raw.songs
-  .filter((song) => song.sheets.some((sheet) => sheet.regions?.cn === true))
-  .map((song, index) => ({
-    id: `${index}:${song.songId}`,
+const majorVersions = lxns.versions
+  .map((item) => item.version)
+  .sort((left, right) => right - left);
+
+function majorVersion(version) {
+  return majorVersions.find((candidate) => version >= candidate);
+}
+
+const radioPrograms = radioPages.flatMap((page) => page.programs ?? []);
+const radioByMaimaiId = new Map();
+
+for (const program of radioPrograms) {
+  const match = program.name?.match(/^(\d+)\s+/);
+  if (!match || !program.mainSong?.id) continue;
+  radioByMaimaiId.set(Number(match[1]), program);
+}
+
+const songs = lxns.songs.map((song) => {
+  const radioProgram = radioByMaimaiId.get(song.id);
+  return {
+    id: String(song.id),
     title: song.title,
     artist: song.artist,
-    genre: song.category,
+    genre: song.genre,
     bpm: song.bpm,
-    version: song.version,
-    cover: `https://dp4p6x0xfi5o9.cloudfront.net/maimai/img/cover/${song.imageName}`,
-  }));
+    version: String(majorVersion(song.version)),
+    cover: `https://assets2.lxns.net/maimai/jacket/${song.id}.png`,
+    preview: radioProgram?.mainSong?.id
+      ? `https://music.163.com/song/media/outer/url?id=${radioProgram.mainSong.id}.mp3`
+      : null,
+  };
+});
 
 const catalog = {
-  updatedAt: raw.updateTime.slice(0, 10),
-  source: "https://arcade-songs.zetaraku.dev/maimai/",
+  updatedAt: new Date().toISOString().slice(0, 10),
+  source: "https://maimai.lxns.net/docs/api/maimai",
+  previewSource: radioPageUrl,
   region: "cn",
-  versionRule: "song.version",
+  versionRule: "lxns-major-version",
   versions,
   songs,
 };
@@ -84,7 +117,7 @@ await writeFile(outputPath, `${JSON.stringify(catalog)}\n`, "utf8");
 
 const counts = Object.fromEntries(
   versions.map((version) => [
-    version.version,
+    version.title,
     songs.filter((song) => song.version === version.version).length,
   ]),
 );
@@ -95,6 +128,7 @@ console.log(
       updatedAt: catalog.updatedAt,
       versions: versions.length,
       songs: songs.length,
+      previews: songs.filter((song) => song.preview).length,
       counts,
     },
     null,
