@@ -563,6 +563,17 @@ export default function Home() {
               } ${isSelected ? "is-selected" : ""}`}
               key={song.id}
             >
+              <button
+                className="card-select-button"
+                type="button"
+                aria-pressed={multiSelect ? isSelected : undefined}
+                aria-label={
+                  multiSelect
+                    ? `${isSelected ? "取消选择" : "选择"} ${song.title}`
+                    : `选择 ${song.title} 晋级`
+                }
+                onClick={() => onChoose(song)}
+              />
               <span className="shortcut">{index + 1}</span>
               <span className="cover-wrap">
                 {!imageErrors[song.id] ? (
@@ -611,18 +622,14 @@ export default function Home() {
                       ? `停止 · ${previewSeconds}s`
                       : "立即试听"}
                 </button>
-                <button
-                  className="pick-label"
-                  type="button"
-                  onClick={() => onChoose(song)}
-                >
+                <span className="pick-label" aria-hidden="true">
                   {multiSelect
                     ? isSelected
                       ? "已选择"
                       : "选择"
                     : "选它晋级"}
                   <span>{isSelected ? "✓" : "→"}</span>
-                </button>
+                </span>
               </span>
             </article>
           );

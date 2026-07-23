@@ -908,10 +908,26 @@ footer a:hover {
   border-radius: 20px;
   background: rgba(17, 21, 29, 0.88);
   overflow: hidden;
+  cursor: pointer;
   transition:
     transform 180ms ease,
     border-color 180ms ease,
     box-shadow 180ms ease;
+}
+
+.card-select-button {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.card-select-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, white);
+  outline-offset: -5px;
 }
 
 .song-card:hover {
@@ -1106,9 +1122,12 @@ footer a:hover {
   cursor: pointer;
   font-size: 9px;
   font-weight: 900;
+  pointer-events: none;
 }
 
 .preview-button {
+  position: relative;
+  z-index: 4;
   color: #aab4c2;
   background: rgba(255, 255, 255, 0.055);
 }
@@ -1126,6 +1145,7 @@ footer a:hover {
 }
 
 .pick-label {
+  pointer-events: none;
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   letter-spacing: 0.08em;

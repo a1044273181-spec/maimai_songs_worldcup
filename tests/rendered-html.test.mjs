@@ -79,6 +79,9 @@ test("battle UI implements immediate preview and the full tournament poster", as
   assert.match(page, /className="roster-group"/);
   assert.match(page, /className="tournament-poster"/);
   assert.match(page, /src="\/site-qr\.png"/);
+  assert.match(page, /className="card-select-button"/);
+  assert.match(page, /onClick=\{\(\) => onChoose\(song\)\}/);
+  assert.match(page, /className="preview-button"/);
   assert.match(page, /stopPreview\(\)/);
   assert.match(page, /立即试听/);
   assert.match(page, /暂无试听/);
