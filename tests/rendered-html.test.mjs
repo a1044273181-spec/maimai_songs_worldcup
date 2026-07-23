@@ -106,9 +106,16 @@ test("battle UI implements immediate preview and a single-screen tournament post
   assert.match(page, /className = "poster-export-host"/);
   assert.match(page, /className="export-button"/);
   assert.match(page, /navigator\.canShare\(\{ files: \[file\] \}\)/);
-  assert.match(page, /isMobileBrowser\(\) && canSharePosterFile\(file\)/);
+  assert.match(page, /isMobileBrowser\(\)/);
+  assert.match(page, /canSharePosterFile\(file\)/);
   assert.match(page, /setTimeout\(\(\) => URL\.revokeObjectURL\(objectUrl\), 60_000\)/);
   assert.match(page, /PUBLIC_SITE_URL/);
+  assert.match(page, /blobToDataUrl\(blob\)/);
+  assert.match(page, /isQQBrowser/);
+  assert.match(page, /copyPosterToClipboard/);
+  assert.match(page, /poster-footer-description/);
+  assert.match(styles, /\.poster-cup-footer[\s\S]*display: flex/);
+  assert.match(styles, /\.poster-footer-description[\s\S]*min-width: 300px/);
   assert.match(page, /posterBlobRef = useRef<Blob/);
   assert.match(page, /setExportState\("ready"\)/);
   assert.match(page, /downloadPoster\(blob, posterFileName\(\)\)/);

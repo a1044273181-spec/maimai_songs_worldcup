@@ -193,6 +193,8 @@ export default function Home() {
     | "ready"
     | "saved"
     | "shared"
+    | "copied"
+    | "qq-help"
     | "fallback"
     | "error"
   >("idle");
@@ -641,6 +643,37 @@ export default function Home() {
     return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   }
 
+  function isQQBrowser() {
+    return /\bQQ\//i.test(navigator.userAgent) || /MQQBrowser/i.test(navigator.userAgent);
+  }
+
+  async function blobToDataUrl(blob: Blob) {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error ?? new Error("data-url"));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function copyPosterToClipboard(blob: Blob) {
+    if (
+      typeof ClipboardItem === "undefined" ||
+      typeof navigator.clipboard?.write !== "function"
+    ) {
+      return false;
+    }
+
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": blob }),
+      ]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function createPosterBlob() {
     const poster = posterRef.current;
     if (!poster) throw new Error("poster");
@@ -691,8 +724,10 @@ export default function Home() {
   }
 
   function posterFileName() {
-    const versionName = selectedVersion?.title ?? "舞萌";
-    return `mai-CUP-${versionName}-比赛一图流.png`;
+    const versionName = (selectedVersion?.abbr ?? "maimai")
+      .replace(/[^a-z0-9_-]+/gi, "-")
+      .replace(/^-+|-+$/g, "");
+    return `mai-CUP-${versionName || "maimai"}-result.png`;
   }
 
   async function savePosterImage() {
@@ -704,7 +739,11 @@ export default function Home() {
       posterBlobRef.current = blob;
       const file = posterFile(blob);
 
-      if (isMobileBrowser() && canSharePosterFile(file)) {
+      if (
+        isMobileBrowser() &&
+        (canSharePosterFile(file) ||
+          (isQQBrowser() && typeof navigator.share === "function"))
+      ) {
         await navigator.share({
           files: [file],
           title: `${selectedVersion?.title ?? "舞萌"} · mai:CUP 比赛一图流`,
@@ -713,11 +752,25 @@ export default function Home() {
         return;
       }
 
+      if (isQQBrowser()) {
+        const copied = await copyPosterToClipboard(blob);
+        setExportState(copied ? "copied" : "qq-help");
+        return;
+      }
+
       downloadPoster(blob, posterFileName());
       setExportState("saved");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setExportState("ready");
+      } else if (
+        posterBlobRef.current &&
+        isQQBrowser() &&
+        (await copyPosterToClipboard(posterBlobRef.current))
+      ) {
+        setExportState("copied");
+      } else if (isQQBrowser()) {
+        setExportState("qq-help");
       } else if (posterBlobRef.current) {
         // 部分安卓 WebView 虽然报告支持文件分享，但实际调用会失败。
         // 此时退回延迟释放的标准下载。
@@ -751,12 +804,24 @@ export default function Home() {
         });
         setExportState("shared");
       } else {
-        downloadPoster(blob, posterFileName());
-        setExportState("fallback");
+        if (isQQBrowser()) {
+          const copied = await copyPosterToClipboard(blob);
+          setExportState(copied ? "copied" : "qq-help");
+        } else {
+          downloadPoster(blob, posterFileName());
+          setExportState("fallback");
+        }
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setExportState("ready");
+      } else if (
+        isQQBrowser() &&
+        (await copyPosterToClipboard(blob))
+      ) {
+        setExportState("copied");
+      } else if (isQQBrowser()) {
+        setExportState("qq-help");
       } else {
         setExportState("error");
       }
@@ -788,7 +853,9 @@ export default function Home() {
         if (posterPreviewUrlRef.current) {
           URL.revokeObjectURL(posterPreviewUrlRef.current);
         }
-        const previewUrl = URL.createObjectURL(blob);
+        // QQ 内置浏览器无法把 blob: 图片交给下载管理器。Data URL 会让
+        // 长按菜单直接面对真实 PNG 数据，而不是一个仅当前页面可见的临时地址。
+        const previewUrl = await blobToDataUrl(blob);
         posterPreviewUrlRef.current = previewUrl;
         setPosterPreviewUrl(previewUrl);
         setExportState("ready");
@@ -1259,6 +1326,10 @@ export default function Home() {
                   ? "一图流PNG已保存。"
                   : exportState === "shared"
                     ? "系统图片面板已完成操作；可选择保存到相册、文件或分享。"
+                    : exportState === "copied"
+                      ? "图片已复制，可粘贴到QQ聊天后再保存到相册。"
+                      : exportState === "qq-help"
+                        ? "QQ内置浏览器限制了文件写入；请点右上角菜单，选择“浏览器打开”后保存。"
                     : exportState === "fallback"
                       ? "已改用浏览器下载；若手机仍拦截，请长按下方预览图保存。"
                       : "图片生成失败，请确认歌曲封面加载完成后重试。"}
@@ -1287,7 +1358,7 @@ export default function Home() {
               </div>
             )}
             <p className="overview-preview-hint">
-              1080px 清晰图 · 手机可点保存或长按预览图
+              1080px 清晰图 · QQ内请优先点保存或分享
             </p>
           </section>
           <article
@@ -1393,9 +1464,9 @@ export default function Home() {
                   <small>为你的本命曲办一场世界杯</small>
                 </div>
               </div>
-              <p>
-                选择舞萌中国版，试听歌曲并完成从小组赛、复活赛
-                <br />到总决赛的完整本命曲淘汰赛。
+              <p className="poster-footer-description">
+                <span>舞萌中国版曲库 · 30秒歌曲试听</span>
+                <span>小组赛、复活赛到总决赛的一图流淘汰赛</span>
               </p>
             </footer>
           </article>

@@ -1909,9 +1909,15 @@ kbd {
 
 .export-status-saved,
 .export-status-shared,
+.export-status-copied,
 .export-status-ready {
   color: var(--lime);
   border-color: rgba(184, 242, 74, 0.28);
+}
+
+.export-status-qq-help {
+  color: #ffd36e;
+  border-color: rgba(255, 211, 110, 0.34);
 }
 
 .export-status-error {
@@ -3478,14 +3484,17 @@ kbd {
   padding: 30px 54px;
   position: relative;
   z-index: 2;
-  display: grid;
-  grid-template-columns: 1.05fr 0.75fr 1fr;
+  display: flex;
   align-items: center;
-  gap: 32px;
+  justify-content: space-between;
+  gap: 24px;
   background: rgba(7, 7, 12, 0.74);
 }
 
 .poster-footer-qr {
+  width: 370px;
+  min-width: 370px;
+  flex: 0 0 370px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -3524,15 +3533,34 @@ kbd {
 }
 
 .poster-cup-footer > .poster-brand {
+  width: 210px;
+  min-width: 210px;
+  flex: 0 0 210px;
   justify-content: center;
 }
 
-.poster-cup-footer > p {
+.poster-cup-footer > .poster-footer-description {
+  width: 300px;
+  min-width: 300px;
+  max-width: 300px;
   margin: 0;
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
   color: #727986;
   text-align: right;
   font-size: 8px;
-  line-height: 1.8;
+  line-height: 1.4;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.poster-footer-description > span {
+  width: 100%;
+  display: block;
 }
 
 .tournament-poster.poster-export-layout.poster-cup-layout {
