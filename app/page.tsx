@@ -309,6 +309,41 @@ export default function Home() {
     return stages;
   }, [history]);
 
+  const posterRouteStages = useMemo(() => {
+    const knockoutStages = overviewStages.filter(
+      (stage) =>
+        stage.label !== "第一轮小组赛" && stage.label !== "淘汰复活",
+    );
+    return knockoutStages.slice(-5, -1).map((stage) => {
+      const seen = new Set<string>();
+      const winners = stage.records
+        .flatMap((record) => record.winners)
+        .filter((song) => {
+          if (seen.has(song.id)) return false;
+          seen.add(song.id);
+          return true;
+        });
+      return { ...stage, winners };
+    });
+  }, [overviewStages]);
+
+  const posterSummary = useMemo(
+    () => ({
+      groupMatches: history.filter(
+        (record) => record.stageLabel === "第一轮小组赛",
+      ).length,
+      revivalMatches: history.filter(
+        (record) => record.stageLabel === "淘汰复活",
+      ).length,
+      knockoutMatches: history.filter(
+        (record) =>
+          record.stageLabel !== "第一轮小组赛" &&
+          record.stageLabel !== "淘汰复活",
+      ).length,
+    }),
+    [history],
+  );
+
   const currentGroup = groupStageGroups[groupIndex] ?? [];
   const currentRevivalGroup = revivalGroups[revivalIndex] ?? [];
   const currentMatch = knockoutRound?.matches[matchIndex] ?? [];
@@ -834,6 +869,50 @@ export default function Home() {
     );
   }
 
+  function renderPosterBracketSide(side: "left" | "right") {
+    const columns = posterRouteStages
+      .map((stage) => {
+        const midpoint = Math.ceil(stage.winners.length / 2);
+        return {
+          label: stage.label,
+          songs:
+            side === "left"
+              ? stage.winners.slice(0, midpoint)
+              : stage.winners.slice(midpoint),
+        };
+      })
+      .filter((column) => column.songs.length);
+    const orderedColumns =
+      side === "left" ? columns : [...columns].reverse();
+
+    return (
+      <div className={`poster-bracket-tree poster-bracket-tree-${side}`}>
+        {orderedColumns.map((column, columnIndex) => (
+          <section
+            className="poster-bracket-column"
+            key={`${side}-${column.label}`}
+          >
+            <small>{column.label}</small>
+            <div>
+              {column.songs.map((song) => (
+                <article
+                  className={`poster-route-song${
+                    song.id === champion?.id ? " is-champion-route" : ""
+                  }`}
+                  key={song.id}
+                >
+                  <img src={song.cover} alt="" />
+                  <strong>{song.title}</strong>
+                  <i>{columnIndex + 1}</i>
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
   if (loadError) {
     return (
       <main className="state-page">
@@ -1122,9 +1201,9 @@ export default function Home() {
               role="status"
             >
               {exportState === "rendering"
-                ? "正在生成完整长图，歌曲较多时需要稍等片刻…"
+                ? "正在生成固定版式海报，歌曲较多时需要稍等片刻…"
                 : exportState === "ready"
-                  ? "宽度1080px的完整一图流已经生成，可以保存PNG或直接分享。"
+                  ? "1080px淘汰树海报已经生成，可以保存PNG或直接分享。"
                 : exportState === "saved"
                   ? "一图流PNG已保存。"
                   : exportState === "shared"
@@ -1157,15 +1236,15 @@ export default function Home() {
               </div>
             )}
             <p className="overview-preview-hint">
-              完整赛程已缩放到一屏 · 保存或分享可查看 1080px 清晰图
+              淘汰树海报已缩放到一屏 · 保存或分享可查看 1080px 清晰图
             </p>
           </section>
           <article
-            className="tournament-poster poster-source-layout"
+            className="tournament-poster poster-cup-layout poster-source-layout"
             ref={posterRef}
             aria-hidden="true"
           >
-            <section className="poster-hero">
+            <header className="poster-cup-header">
               <div className="poster-brand">
                 <span className="brand-disc">
                   <i />
@@ -1175,122 +1254,82 @@ export default function Home() {
                   <small>MAIMAI CHINA FAVORITE TOURNAMENT</small>
                 </div>
               </div>
-              <div>
-                <span className="eyebrow">FULL TOURNAMENT STORY</span>
-                <h1>
-                  {selectedVersion.title}
-                  <br />
-                  歌曲世界杯
-                </h1>
-                <p>
-                  从版本完整曲库出发，经过小组赛双选、淘汰复活与一对一淘汰，
-                  <br />
-                  依次决出八强、四强与最终冠军。下方记录了本次比赛的全部选择。
-                </p>
+              <span>TOURNAMENT OVERVIEW · 完整比赛概览</span>
+              <h1>{selectedVersion.title} · 歌曲世界杯</h1>
+              <div className="poster-cup-summary">
+                <span>
+                  <strong>{entrants.length}</strong> 首参赛
+                </span>
+                <i />
+                <span>
+                  <strong>{groupStageGroups.length}</strong> 个小组
+                </span>
+                <i />
+                <span>
+                  <strong>{posterSummary.revivalMatches}</strong> 首复活
+                </span>
+                <i />
+                <span>
+                  <strong>{posterSummary.knockoutMatches}</strong> 场淘汰
+                </span>
               </div>
-              <div className="poster-hero-bottom">
-                <div className="poster-stats">
-                  <span>
-                    <strong>{entrants.length}</strong>参赛歌曲
-                  </span>
-                  <span>
-                    <strong>{groupStageGroups.length}</strong>初始小组
-                  </span>
-                  <span>
-                    <strong>{overviewStages.length}</strong>比赛阶段
-                  </span>
-                </div>
-                <div className="poster-qr">
-                  <img src="/site-qr.png" alt="mai:CUP 网站主页二维码" />
-                  <div>
-                    <strong>扫码开始你的比赛</strong>
-                    <span>{SITE_URL.replace("https://", "")}</span>
-                  </div>
-                </div>
-              </div>
-            </section>
+            </header>
 
-            <section className="poster-champion">
-              <div className="poster-crown">♛</div>
-              <img src={champion.cover} alt="" />
-              <div>
-                <span>🏆 CHAMPION · 本届冠军</span>
+            <section className="poster-cup-bracket">
+              <span className="poster-bracket-caption poster-bracket-caption-left">
+                ROAD TO FINAL · 左半区
+              </span>
+              <span className="poster-bracket-caption poster-bracket-caption-right">
+                右半区 · ROAD TO FINAL
+              </span>
+              {renderPosterBracketSide("left")}
+              <div className="poster-cup-champion">
+                <span className="poster-cup-crown">♛</span>
+                <img src={champion.cover} alt="" />
+                <strong>🏆 冠军 · CHAMPION</strong>
                 <h2>{champion.title}</h2>
                 <p>{champion.artist}</p>
                 <small>
-                  从 {entrants.length} 首歌曲中胜出 · {champion.bpm} BPM
+                  {champion.genre} · {champion.bpm} BPM
                 </small>
               </div>
+              {renderPosterBracketSide("right")}
             </section>
 
-            <section className="poster-section poster-roster-section">
-              <header className="poster-section-heading">
-                <span>00</span>
-                <div>
-                  <small>GROUP DRAW</small>
-                  <h2>参赛歌曲与初始分组</h2>
-                </div>
-                <p>每组框选展示 · 每组选择2首晋级</p>
-              </header>
-              <div className="poster-roster-groups">
-                {groupStageGroups.map((group, rosterGroupIndex) => (
-                  <article
-                    className="poster-roster-group"
-                    key={rosterGroupIndex}
-                  >
-                    <header>
-                      <strong>
-                        GROUP {String(rosterGroupIndex + 1).padStart(2, "0")}
-                      </strong>
-                      <span>第 {rosterGroupIndex + 1} 组</span>
-                    </header>
-                    {group.map((song) => (
-                      <div key={song.id}>
-                        <img src={song.cover} alt="" />
-                        <span>{song.title}</span>
-                      </div>
-                    ))}
-                  </article>
-                ))}
+            <section className="poster-cup-journey">
+              <div>
+                <small>GROUP STAGE</small>
+                <strong>{posterSummary.groupMatches} 组小组赛</strong>
+                <span>每组选择两首晋级</span>
+              </div>
+              <b>→</b>
+              <div>
+                <small>REVIVAL</small>
+                <strong>{posterSummary.revivalMatches} 首淘汰复活</strong>
+                <span>三分之一名额向上取整</span>
+              </div>
+              <b>→</b>
+              <div>
+                <small>KNOCKOUT</small>
+                <strong>{posterSummary.knockoutMatches} 场一对一</strong>
+                <span>八强 · 四强 · 总决赛</span>
+              </div>
+              <b>→</b>
+              <div className="is-final">
+                <small>WINNER</small>
+                <strong>{champion.title}</strong>
+                <span>最终冠军</span>
               </div>
             </section>
 
-            {overviewStages.map((stage, stageIndex) => (
-              <section className="poster-section" key={stage.label}>
-                <header className="poster-section-heading">
-                  <span>{String(stageIndex + 1).padStart(2, "0")}</span>
-                  <div>
-                    <small>TOURNAMENT STAGE</small>
-                    <h2>{stage.label}</h2>
-                  </div>
-                  <p>{stage.records.length} 场选择</p>
-                </header>
-                <div className="poster-matches">
-                  {stage.records.map((record) => (
-                    <article className="poster-match" key={record.id}>
-                      <small>{record.detail}</small>
-                      {record.participants.map((song) => {
-                        const isWinner = record.winners.some(
-                          (winner) => winner.id === song.id,
-                        );
-                        return (
-                          <div
-                            className={isWinner ? "advanced" : "eliminated"}
-                            key={song.id}
-                          >
-                            <img src={song.cover} alt="" />
-                            <span>{song.title}</span>
-                            <b>{isWinner ? "晋级" : "淘汰"}</b>
-                          </div>
-                        );
-                      })}
-                    </article>
-                  ))}
+            <footer className="poster-cup-footer">
+              <div className="poster-footer-qr">
+                <img src="/site-qr.png" alt="mai:CUP 网站主页二维码" />
+                <div>
+                  <strong>扫码开始你的本命曲世界杯</strong>
+                  <span>{SITE_URL.replace("https://", "")}</span>
                 </div>
-              </section>
-            ))}
-
-            <footer className="poster-footer">
+              </div>
               <div className="poster-brand">
                 <span className="brand-disc">
                   <i />
@@ -1301,9 +1340,8 @@ export default function Home() {
                 </div>
               </div>
               <p>
-                选择一个舞萌中国版，试听歌曲并完成属于你的完整淘汰赛。
-                <br />
-                扫描页面顶部二维码或访问 {SITE_URL.replace("https://", "")}
+                选择舞萌中国版，试听歌曲并完成从小组赛、复活赛
+                <br />到总决赛的完整本命曲淘汰赛。
               </p>
             </footer>
           </article>

@@ -81,15 +81,23 @@ test("battle UI implements immediate preview and a single-screen tournament post
   assert.match(page, /总决赛/);
   assert.match(page, /观看比赛概览/);
   assert.match(page, /className="roster-group"/);
-  assert.match(page, /className="tournament-poster poster-source-layout"/);
+  assert.match(
+    page,
+    /className="tournament-poster poster-cup-layout poster-source-layout"/,
+  );
   assert.match(page, /className="overview-screen"/);
   assert.match(page, /className="overview-preview-image"/);
+  assert.match(page, /poster-bracket-tree/);
+  assert.match(page, /poster-cup-champion/);
+  assert.match(page, /poster-cup-journey/);
   assert.match(page, /posterPreviewUrl/);
   assert.match(page, /URL\.createObjectURL\(blob\)/);
   assert.match(page, /URL\.revokeObjectURL/);
   assert.match(styles, /\.overview-fit-page[\s\S]*height: 100dvh/);
   assert.match(styles, /\.overview-preview-image[\s\S]*max-height: 100%/);
   assert.match(styles, /\.poster-source-layout[\s\S]*left: -20000px/);
+  assert.match(styles, /\.poster-cup-layout[\s\S]*height: 1920px/);
+  assert.match(styles, /\.poster-cup-bracket[\s\S]*grid-template-columns/);
   assert.match(page, /src="\/site-qr\.png"/);
   assert.match(page, /import\("html-to-image"\)/);
   assert.match(page, /POSTER_EXPORT_WIDTH = 1080/);
