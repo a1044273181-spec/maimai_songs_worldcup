@@ -101,7 +101,9 @@ test("battle UI implements immediate preview and a single-screen tournament post
   assert.match(page, /src=\{assetPath\(SITE_QR_IMAGE\)\}/);
   assert.match(page, /import\("html-to-image"\)/);
   assert.match(page, /POSTER_EXPORT_WIDTH = 1080/);
+  assert.match(page, /POSTER_EXPORT_HEIGHT = 1920/);
   assert.match(page, /canvasWidth: POSTER_EXPORT_WIDTH/);
+  assert.match(page, /height: `\$\{POSTER_EXPORT_HEIGHT\}px`/);
   assert.match(page, /pixelRatio: 1/);
   assert.match(page, /className = "poster-export-host"/);
   assert.match(page, /className="export-button"/);
@@ -114,8 +116,9 @@ test("battle UI implements immediate preview and a single-screen tournament post
   assert.match(page, /isQQBrowser/);
   assert.match(page, /copyPosterToClipboard/);
   assert.match(page, /poster-footer-description/);
-  assert.match(styles, /\.poster-cup-footer[\s\S]*display: flex/);
-  assert.match(styles, /\.poster-footer-description[\s\S]*min-width: 300px/);
+  assert.match(styles, /\.poster-cup-footer[\s\S]*display: block/);
+  assert.match(styles, /\.poster-footer-qr[\s\S]*position: absolute/);
+  assert.match(styles, /\.poster-footer-description[\s\S]*position: absolute/);
   assert.match(page, /posterBlobRef = useRef<Blob/);
   assert.match(page, /setExportState\("ready"\)/);
   assert.match(page, /downloadPoster\(blob, posterFileName\(\)\)/);

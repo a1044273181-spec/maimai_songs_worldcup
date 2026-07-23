@@ -3481,20 +3481,23 @@ kbd {
 }
 
 .poster-cup-footer {
-  padding: 30px 54px;
+  height: 190px;
+  min-height: 190px;
+  padding: 0;
   position: relative;
   z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+  display: block;
+  overflow: hidden;
   background: rgba(7, 7, 12, 0.74);
 }
 
 .poster-footer-qr {
   width: 370px;
+  height: 108px;
   min-width: 370px;
-  flex: 0 0 370px;
+  position: absolute;
+  top: 41px;
+  left: 54px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -3534,17 +3537,23 @@ kbd {
 
 .poster-cup-footer > .poster-brand {
   width: 210px;
+  height: 64px;
   min-width: 210px;
-  flex: 0 0 210px;
+  position: absolute;
+  top: 63px;
+  left: 435px;
   justify-content: center;
 }
 
 .poster-cup-footer > .poster-footer-description {
   width: 300px;
+  height: 52px;
   min-width: 300px;
   max-width: 300px;
   margin: 0;
-  flex: 0 0 300px;
+  position: absolute;
+  top: 69px;
+  right: 54px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -3556,6 +3565,7 @@ kbd {
   white-space: nowrap;
   word-break: keep-all;
   overflow-wrap: normal;
+  overflow: hidden;
 }
 
 .poster-footer-description > span {

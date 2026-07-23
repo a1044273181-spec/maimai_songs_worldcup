@@ -73,6 +73,7 @@ const GROUP_SIZE = 4;
 const GROUP_PICKS = 2;
 const PREVIEW_LIMIT_SECONDS = 30;
 const POSTER_EXPORT_WIDTH = 1080;
+const POSTER_EXPORT_HEIGHT = 1920;
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
@@ -698,7 +699,7 @@ export default function Home() {
 
     try {
       const { toBlob } = await import("html-to-image");
-      const posterHeight = exportPoster.scrollHeight;
+      const posterHeight = POSTER_EXPORT_HEIGHT;
       const blob = await toBlob(exportPoster, {
         width: POSTER_EXPORT_WIDTH,
         height: posterHeight,
@@ -709,9 +710,12 @@ export default function Home() {
         pixelRatio: 1,
         style: {
           width: `${POSTER_EXPORT_WIDTH}px`,
+          height: `${POSTER_EXPORT_HEIGHT}px`,
+          minHeight: `${POSTER_EXPORT_HEIGHT}px`,
           maxWidth: "none",
           margin: "0",
           borderRadius: "0",
+          overflow: "hidden",
         },
         imagePlaceholder:
           "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=",
