@@ -70,7 +70,7 @@ test("battle UI implements immediate preview and a single-screen tournament post
   );
 
   assert.match(page, /audioRef = useRef<HTMLAudioElement/);
-  assert.doesNotMatch(page, /PREVIEW_DELAY_MS|setTimeout/);
+  assert.doesNotMatch(page, /PREVIEW_DELAY_MS/);
   assert.match(page, /PREVIEW_LIMIT_SECONDS = 30/);
   assert.match(page, /await audio\.play\(\)/);
   assert.match(page, /Math\.ceil\(nextQualified\.length \/ 3\)/);
@@ -106,6 +106,9 @@ test("battle UI implements immediate preview and a single-screen tournament post
   assert.match(page, /className = "poster-export-host"/);
   assert.match(page, /className="export-button"/);
   assert.match(page, /navigator\.canShare\(\{ files: \[file\] \}\)/);
+  assert.match(page, /isMobileBrowser\(\) && canSharePosterFile\(file\)/);
+  assert.match(page, /setTimeout\(\(\) => URL\.revokeObjectURL\(objectUrl\), 60_000\)/);
+  assert.match(page, /PUBLIC_SITE_URL/);
   assert.match(page, /posterBlobRef = useRef<Blob/);
   assert.match(page, /setExportState\("ready"\)/);
   assert.match(page, /downloadPoster\(blob, posterFileName\(\)\)/);

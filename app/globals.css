@@ -3076,6 +3076,9 @@ kbd {
   background-size: auto;
   box-shadow: none;
   overflow: hidden;
+  font-family:
+    Arial, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-synthesis: none;
 }
 
 .poster-cup-layout::before {
@@ -3497,21 +3500,27 @@ kbd {
 }
 
 .poster-footer-qr > div {
-  min-width: 0;
+  min-width: 210px;
+  max-width: 220px;
   display: flex;
   flex-direction: column;
   gap: 7px;
 }
 
 .poster-footer-qr strong {
+  display: block;
+  white-space: nowrap;
   font-size: 10px;
+  line-height: 1.4;
 }
 
 .poster-footer-qr span {
   color: var(--cyan);
-  overflow-wrap: anywhere;
-  font-family: ui-monospace, monospace;
+  overflow-wrap: break-word;
+  word-break: normal;
+  font-family: Arial, sans-serif;
   font-size: 7px;
+  line-height: 1.45;
 }
 
 .poster-cup-footer > .poster-brand {

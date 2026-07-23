@@ -79,6 +79,7 @@ const SITE_URL =
   "https://mai-cup-cn-2026.xzso3.chatgpt.site";
 const SITE_QR_IMAGE =
   process.env.NEXT_PUBLIC_SITE_QR_IMAGE ?? "/site-qr.png";
+const PUBLIC_SITE_URL = `${SITE_URL.replace(/\/$/, "")}${BASE_PATH}/`;
 const palette = ["cyan", "lime", "pink", "violet", "orange"];
 
 function assetPath(path: string) {
@@ -610,10 +611,34 @@ export default function Home() {
     const link = document.createElement("a");
     link.href = objectUrl;
     link.download = fileName;
+    link.style.display = "none";
     document.body.appendChild(link);
     link.click();
     link.remove();
-    requestAnimationFrame(() => URL.revokeObjectURL(objectUrl));
+
+    // Android 的下载管理器会在点击事件结束后才读取 Blob。过早释放会导致
+    // “无法写入存储卡”等错误，因此给系统足够时间接管文件。
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  }
+
+  function posterFile(blob: Blob) {
+    return new File([blob], posterFileName(), { type: "image/png" });
+  }
+
+  function canSharePosterFile(file: File) {
+    try {
+      return (
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] })
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function isMobileBrowser() {
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   }
 
   async function createPosterBlob() {
@@ -677,10 +702,30 @@ export default function Home() {
     try {
       const blob = posterBlobRef.current ?? (await createPosterBlob());
       posterBlobRef.current = blob;
+      const file = posterFile(blob);
+
+      if (isMobileBrowser() && canSharePosterFile(file)) {
+        await navigator.share({
+          files: [file],
+          title: `${selectedVersion?.title ?? "舞萌"} · mai:CUP 比赛一图流`,
+        });
+        setExportState("shared");
+        return;
+      }
+
       downloadPoster(blob, posterFileName());
       setExportState("saved");
-    } catch {
-      setExportState("error");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setExportState("ready");
+      } else if (posterBlobRef.current) {
+        // 部分安卓 WebView 虽然报告支持文件分享，但实际调用会失败。
+        // 此时退回延迟释放的标准下载。
+        downloadPoster(posterBlobRef.current, posterFileName());
+        setExportState("fallback");
+      } else {
+        setExportState("error");
+      }
     } finally {
       exportBusyRef.current = false;
     }
@@ -695,11 +740,8 @@ export default function Home() {
     }
     exportBusyRef.current = true;
     try {
-      const file = new File([blob], posterFileName(), { type: "image/png" });
-      const supportsFileShare =
-        typeof navigator.share === "function" &&
-        typeof navigator.canShare === "function" &&
-        navigator.canShare({ files: [file] });
+      const file = posterFile(blob);
+      const supportsFileShare = canSharePosterFile(file);
 
       if (supportsFileShare) {
         await navigator.share({
@@ -714,7 +756,7 @@ export default function Home() {
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        setExportState("idle");
+        setExportState("ready");
       } else {
         setExportState("error");
       }
@@ -1216,9 +1258,9 @@ export default function Home() {
                 : exportState === "saved"
                   ? "一图流PNG已保存。"
                   : exportState === "shared"
-                    ? "一图流已经发送到系统分享面板。"
+                    ? "系统图片面板已完成操作；可选择保存到相册、文件或分享。"
                     : exportState === "fallback"
-                      ? "当前浏览器不支持直接分享图片，PNG已保存，请从相册或下载目录分享。"
+                      ? "已改用浏览器下载；若手机仍拦截，请长按下方预览图保存。"
                       : "图片生成失败，请确认歌曲封面加载完成后重试。"}
             </p>
           )}
@@ -1245,7 +1287,7 @@ export default function Home() {
               </div>
             )}
             <p className="overview-preview-hint">
-              淘汰树海报已缩放到一屏 · 保存或分享可查看 1080px 清晰图
+              1080px 清晰图 · 手机可点保存或长按预览图
             </p>
           </section>
           <article
@@ -1339,7 +1381,7 @@ export default function Home() {
                 />
                 <div>
                   <strong>扫码开始你的本命曲世界杯</strong>
-                  <span>{SITE_URL.replace("https://", "")}</span>
+                  <span>{PUBLIC_SITE_URL.replace("https://", "")}</span>
                 </div>
               </div>
               <div className="poster-brand">
