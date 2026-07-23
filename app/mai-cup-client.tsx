@@ -716,6 +716,207 @@ export default function Home() {
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
+  function rewindGroup(groupToRestore: number) {
+    const recordId = `group-${groupToRestore}`;
+    const restoredRecord = history.find((record) => record.id === recordId);
+    const restoredSongIds = new Set(
+      (groupStageGroups[groupToRestore] ?? []).map((song) => song.id),
+    );
+
+    setGroupIndex(groupToRestore);
+    setGroupPicks(restoredRecord?.winners.map((song) => song.id) ?? []);
+    setGroupQualified((current) =>
+      current.filter((song) => !restoredSongIds.has(song.id)),
+    );
+    setGroupEliminated((current) =>
+      current.filter((song) => !restoredSongIds.has(song.id)),
+    );
+    setHistory((current) =>
+      current.filter((record) => {
+        const groupMatch = /^group-(\d+)$/.exec(record.id);
+        return groupMatch ? Number(groupMatch[1]) < groupToRestore : false;
+      }),
+    );
+    setRevivalGroups([]);
+    setRevivalIndex(0);
+    setRevivedSongs([]);
+    setKnockoutRound(null);
+    setMatchIndex(0);
+    setKnockoutWinners([]);
+    setChampion(null);
+    setPhase("group");
+  }
+
+  function rewindRevival(revivalToRestore: number) {
+    const recordId = `revival-${revivalToRestore}`;
+    const restoredRecord = history.find((record) => record.id === recordId);
+    const restoredWinnerIds = new Set(
+      restoredRecord?.winners.map((song) => song.id) ?? [],
+    );
+
+    setRevivalIndex(revivalToRestore);
+    setRevivedSongs((current) =>
+      current.filter((song) => !restoredWinnerIds.has(song.id)),
+    );
+    setHistory((current) =>
+      current.filter((record) => {
+        if (record.id.startsWith("group-")) return true;
+        const revivalMatch = /^revival-(\d+)$/.exec(record.id);
+        return revivalMatch
+          ? Number(revivalMatch[1]) < revivalToRestore
+          : false;
+      }),
+    );
+    setKnockoutRound(null);
+    setMatchIndex(0);
+    setKnockoutWinners([]);
+    setChampion(null);
+    setPhase("revival");
+  }
+
+  function roundFromHistory(roundNumber: number) {
+    const matchRecords = history
+      .filter((record) =>
+        record.id.startsWith(`knockout-${roundNumber}-`),
+      )
+      .sort((left, right) => {
+        const leftIndex = Number(left.id.split("-").at(-1));
+        const rightIndex = Number(right.id.split("-").at(-1));
+        return leftIndex - rightIndex;
+      });
+    const byeRecords = history.filter((record) =>
+      record.id.startsWith(`bye-${roundNumber}-`),
+    );
+    if (!matchRecords.length) return null;
+
+    const matches = matchRecords.map((record) => record.participants);
+    const automaticWinners = byeRecords.flatMap(
+      (record) => record.participants,
+    );
+    return {
+      number: roundNumber,
+      label: matchRecords[0].stageLabel,
+      participantCount:
+        matches.reduce((total, match) => total + match.length, 0) +
+        automaticWinners.length,
+      matches,
+      automaticWinners,
+    } satisfies KnockoutRound;
+  }
+
+  function rewindKnockout(
+    roundToRestore: KnockoutRound,
+    matchToRestore: number,
+  ) {
+    const winnerRecords = history
+      .filter((record) => {
+        const match = /^knockout-(\d+)-(\d+)$/.exec(record.id);
+        return (
+          match &&
+          Number(match[1]) === roundToRestore.number &&
+          Number(match[2]) < matchToRestore
+        );
+      })
+      .sort((left, right) => {
+        const leftIndex = Number(left.id.split("-").at(-1));
+        const rightIndex = Number(right.id.split("-").at(-1));
+        return leftIndex - rightIndex;
+      });
+
+    setHistory((current) =>
+      current.filter((record) => {
+        if (
+          record.id.startsWith("group-") ||
+          record.id.startsWith("revival-")
+        ) {
+          return true;
+        }
+        const knockoutMatch = /^knockout-(\d+)-(\d+)$/.exec(record.id);
+        if (knockoutMatch) {
+          const recordRound = Number(knockoutMatch[1]);
+          const recordMatch = Number(knockoutMatch[2]);
+          return (
+            recordRound < roundToRestore.number ||
+            (recordRound === roundToRestore.number &&
+              recordMatch < matchToRestore)
+          );
+        }
+        const byeMatch = /^bye-(\d+)-(\d+)$/.exec(record.id);
+        return byeMatch
+          ? Number(byeMatch[1]) < roundToRestore.number
+          : false;
+      }),
+    );
+    setKnockoutRound(roundToRestore);
+    setMatchIndex(matchToRestore);
+    setKnockoutWinners(winnerRecords.flatMap((record) => record.winners));
+    setChampion(null);
+    setPhase("knockout");
+  }
+
+  function clearSavedChampion() {
+    if (!selectedVersion) return;
+    const nextResults = { ...results };
+    delete nextResults[selectedVersion.version];
+    setResults(nextResults);
+    try {
+      window.localStorage.setItem(RESULTS_KEY, JSON.stringify(nextResults));
+    } catch {
+      // 本次会话中的冠军状态仍会被清除。
+    }
+  }
+
+  function goToPreviousStage() {
+    stopPreview();
+
+    if (phase === "overview") {
+      setPhase("champion");
+    } else if (phase === "champion") {
+      clearSavedChampion();
+      if (knockoutRound?.matches.length) {
+        rewindKnockout(knockoutRound, knockoutRound.matches.length - 1);
+      } else if (revivalGroups.length) {
+        rewindRevival(revivalGroups.length - 1);
+      } else if (groupStageGroups.length) {
+        rewindGroup(groupStageGroups.length - 1);
+      }
+    } else if (phase === "knockout" && knockoutRound) {
+      if (matchIndex > 0) {
+        rewindKnockout(knockoutRound, matchIndex - 1);
+      } else if (knockoutRound.number > 1) {
+        const previousRound = roundFromHistory(knockoutRound.number - 1);
+        if (previousRound?.matches.length) {
+          rewindKnockout(previousRound, previousRound.matches.length - 1);
+        }
+      } else if (revivalGroups.length) {
+        rewindRevival(revivalGroups.length - 1);
+      } else if (groupStageGroups.length) {
+        rewindGroup(groupStageGroups.length - 1);
+      }
+    } else if (phase === "revival") {
+      if (revivalIndex > 0) {
+        rewindRevival(revivalIndex - 1);
+      } else if (groupStageGroups.length) {
+        rewindGroup(groupStageGroups.length - 1);
+      }
+    } else if (phase === "group") {
+      if (groupIndex > 0) {
+        rewindGroup(groupIndex - 1);
+      } else {
+        setGroupPicks([]);
+        setGroupQualified([]);
+        setGroupEliminated([]);
+        setHistory([]);
+        setPhase("roster");
+      }
+    } else if (phase === "roster") {
+      goHome();
+      return;
+    }
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function goHome() {
     stopPreview();
     setPhase("home");
@@ -1189,7 +1390,11 @@ export default function Home() {
     return (
       <main className="tournament-page roster-page">
         <header className="battle-header">
-          <button className="icon-button" onClick={goHome} aria-label="返回">
+          <button
+            className="icon-button"
+            onClick={goToPreviousStage}
+            aria-label="返回上一阶段"
+          >
             ←
           </button>
           <div className="battle-heading">
@@ -1305,7 +1510,11 @@ export default function Home() {
     return (
       <main className="battle-page">
         <header className="battle-header">
-          <button className="icon-button" onClick={goHome} aria-label="返回">
+          <button
+            className="icon-button"
+            onClick={goToPreviousStage}
+            aria-label="返回上一阶段"
+          >
             ←
           </button>
           <div className="battle-heading">
@@ -1399,7 +1608,7 @@ export default function Home() {
           <header className="overview-header">
             <button
               className="icon-button"
-              onClick={() => setPhase("champion")}
+              onClick={goToPreviousStage}
               aria-label="返回冠军页"
             >
               ←
@@ -1604,8 +1813,8 @@ export default function Home() {
             <i key={index} />
           ))}
         </div>
-        <button className="champion-back" onClick={goHome}>
-          ← 全部版本
+        <button className="champion-back" onClick={goToPreviousStage}>
+          ← 返回上一阶段
         </button>
         <section className="champion-card">
           <span className="champion-kicker">TOURNAMENT CHAMPION</span>

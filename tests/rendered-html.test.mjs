@@ -140,6 +140,15 @@ test("battle UI implements immediate preview and a single-screen tournament post
   assert.match(page, /stopPreview\(\)/);
   assert.match(page, /立即试听/);
   assert.match(page, /暂无试听/);
+  assert.match(page, /function goToPreviousStage\(\)/);
+  assert.match(page, /rewindGroup\(groupIndex - 1\)/);
+  assert.match(page, /rewindRevival\(revivalIndex - 1\)/);
+  assert.match(page, /rewindKnockout\(knockoutRound, matchIndex - 1\)/);
+  assert.match(page, /onClick=\{goToPreviousStage\}/);
+  assert.doesNotMatch(
+    page,
+    /className="battle-header"[\s\S]{0,500}onClick=\{goHome\}/,
+  );
 
   const qr = await stat(new URL("../public/site-qr.png", import.meta.url));
   assert.ok(qr.size > 1000);
