@@ -61,7 +61,7 @@ test("catalog uses Chinese annual versions and mapped previews", async () => {
 
 test("battle UI implements immediate preview and a single-screen tournament poster", async () => {
   const page = await readFile(
-    new URL("../app/page.tsx", import.meta.url),
+    new URL("../app/mai-cup-client.tsx", import.meta.url),
     "utf8",
   );
   const styles = await readFile(
@@ -98,7 +98,7 @@ test("battle UI implements immediate preview and a single-screen tournament post
   assert.match(styles, /\.poster-source-layout[\s\S]*left: -20000px/);
   assert.match(styles, /\.poster-cup-layout[\s\S]*height: 1920px/);
   assert.match(styles, /\.poster-cup-bracket[\s\S]*grid-template-columns/);
-  assert.match(page, /src="\/site-qr\.png"/);
+  assert.match(page, /src=\{assetPath\(SITE_QR_IMAGE\)\}/);
   assert.match(page, /import\("html-to-image"\)/);
   assert.match(page, /POSTER_EXPORT_WIDTH = 1080/);
   assert.match(page, /canvasWidth: POSTER_EXPORT_WIDTH/);
@@ -118,4 +118,31 @@ test("battle UI implements immediate preview and a single-screen tournament post
 
   const qr = await stat(new URL("../public/site-qr.png", import.meta.url));
   assert.ok(qr.size > 1000);
+});
+
+test("GitHub Pages build is static and repository-path aware", async () => {
+  const [entry, config, workflow, buildScript] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../next.config.ts", import.meta.url), "utf8"),
+    readFile(
+      new URL("../.github/workflows/deploy-pages.yml", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../scripts/build-github-pages.mjs", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(entry, /export const dynamic = "force-static"/);
+  assert.match(config, /output: isGitHubPages \? "export"/);
+  assert.match(workflow, /actions\/configure-pages@v5/);
+  assert.match(workflow, /actions\/upload-pages-artifact@v4/);
+  assert.match(workflow, /actions\/deploy-pages@v4/);
+  assert.match(workflow, /path: dist\/client/);
+  assert.match(buildScript, /NEXT_PUBLIC_BASE_PATH: basePath/);
+  assert.match(
+    buildScript,
+    /https:\/\/\$\{owner\.toLowerCase\(\)\}\.github\.io/,
+  );
 });

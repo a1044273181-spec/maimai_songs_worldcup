@@ -1,7 +1,14 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  "https://mai-cup-cn-2026.xzso3.chatgpt.site";
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const socialImageUrl = `${siteUrl}${basePath}/og.png`;
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "mai:CUP｜舞萌中国版歌曲淘汰赛",
   description:
     "按舞萌中国版曲库展开小组赛、淘汰复活与一对一淘汰赛，试听30秒后选出每个版本的唯一冠军。",
@@ -12,7 +19,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/og.png",
+        url: socialImageUrl,
         width: 1731,
         height: 909,
         alt: "mai:CUP 舞萌中国版歌曲淘汰赛",
@@ -24,7 +31,7 @@ export const metadata: Metadata = {
     title: "mai:CUP｜舞萌中国版歌曲淘汰赛",
     description:
       "小组赛双选、淘汰复活、一对一淘汰，决出你的舞萌版本本命曲。",
-    images: ["/og.png"],
+    images: [socialImageUrl],
   },
 };
 
